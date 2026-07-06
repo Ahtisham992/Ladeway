@@ -111,3 +111,29 @@ Phase 4 is fully implemented! Ladeway is now secured with robust JWT-based authe
 
 ## Next Steps
 We are now fully prepared for **Phase 5: AI LLM Integration (Ollama)**. Let me know when you're ready to proceed!
+
+
+
+# Phase 5 Complete — Ollama & Groq Connectivity & LLM Router Service
+
+Phase 5 is fully implemented! Ladeway's backend now has a powerful, provider-agnostic AI inference layer capable of handling both your local GPU and ultra-fast remote APIs with zero downtime via exponential backoffs.
+
+## 1. Provider Agnostic Routing (`LLMRouterService`)
+- Built the `LLMRouterService` with a centralized `stream()` method serving as the entrypoint for all future AI requests.
+- Integrated **Exponential Backoff**: If any provider fails to respond or throws a network error, the router automatically retries up to 3 times, increasing the delay multiplicatively, before failing gracefully with an `AIUnavailableException`.
+
+## 2. Local GPU Inference (Ollama)
+- Targeted `http://localhost:11434/api/chat` using the `llama3:latest` model, ensuring that the heavy lifting takes place natively on your RTX 4050.
+- Implemented robust streaming. Rather than buffering heavy responses, the payload (`chunk.message.content`) streams sequentially as a readable `AsyncIterable<string>`, minimizing memory overhead.
+
+## 3. High-Speed Inference (Groq API)
+- Designed and built the alternative Groq API layer targeting `https://api.groq.com/openai/v1/chat/completions`.
+- Safely integrated parsing for Server-Sent Events (SSE). Critically, I intercepted the `data: [DONE]` stream termination marker to prevent malformed JSON exceptions, gracefully ending the iteration cycle instead.
+- This layer remains functionally complete but purposefully commented out inside the `LLMRouterService` until activated via `ACTIVE_LLM_PROVIDER=groq`.
+
+## 4. Verification & Health Monitoring
+- I hit the `/health/ai` endpoint and verified that the `generateSingleToken()` successfully loaded the model and produced a completion. 
+- I subsequently triggered a raw stream dump by hitting the test endpoint (`/health/ai/test-stream`). The backend sequentially flushed tokens directly from Ollama out to the HTTP response buffer in real time!
+
+## Next Steps
+With the inference layer stable, we are ready for **Phase 6: Industry Config Module & Validation**. Let me know when you're ready to proceed!

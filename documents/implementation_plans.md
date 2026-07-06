@@ -201,3 +201,55 @@ Create a beautiful, modern login page implementing dynamic micro-animations and 
 1. **API Integration Test:** Create a temporary `@Roles('ADMIN')` protected endpoint. Attempt to hit it without a token (expect 401). 
 2. **Login Verification:** Login via Next.js UI using `admin@logicstics.com`. Assert the JWT is received and stored.
 3. **RBAC Verification:** Hit the protected endpoint with the received JWT (expect 200). Attempt with a `REP` user token (expect 403).
+
+
+
+
+# Phase 5 — Ollama & Groq Connectivity & LLM Router Service
+
+This phase integrates the AI inference layer behind a clean, provider-agnostic `LLMRouterService`. This service handles the complexities of streaming responses and network resilience (retries, exponential backoff) before any conversation logic is built on top of it.
+
+## Key Updates from the Previous Plan
+1. **Ollama Chat Endpoint Validation**: The Ollama provider will strictly use `POST http://localhost:11434/api/chat` with multi-turn message history `{"role": "user", "content": "..."}` instead of `/api/generate`.
+2. **Correct Chunk Parsing**: The stream reader will accurately extract tokens from `chunk.message.content` rather than the single-turn `chunk.response` property.
+3. **Exact Model Designation**: Having run `ollama list` locally, the environment variable `OLLAMA_MODEL` will be strictly set to `llama3:latest`.
+4. **Groq Provider Implementation**: The Groq API connection will be fully built out (parsing the OpenAI-compatible Server-Sent Events format). The system will switch dynamically between Ollama and Groq based on the `ACTIVE_LLM_PROVIDER` environment variable.
+
+## Proposed Changes
+
+### 1. Application Architecture Layer
+#### [NEW] `apps/api/src/ai/ai.module.ts`
+Create the `AIModule` to encapsulate all external AI provider interactions.
+
+#### [NEW] `apps/api/src/ai/ai.exceptions.ts`
+Implement `AIUnavailableException` to seamlessly handle provider unreachability, connection timeouts, and generic LLM downtime.
+
+### 2. Provider Integrations
+#### [NEW] `apps/api/src/ai/llm-router.service.ts`
+Implement the central `LLMRouterService`:
+- Resolves the provider dynamically via `ConfigService.get('ACTIVE_LLM_PROVIDER')` (values: `ollama` or `groq`).
+- A single public method: `stream(messages: LLMMessage[], options?: StreamOptions): AsyncIterable<string>`.
+- Internal `streamOllama()` method pointing to `localhost:11434/api/chat`, processing newline-delimited JSON chunks.
+- Internal `streamGroq()` method pointing to `https://api.groq.com/openai/v1/chat/completions`, parsing OpenAI-style `data: {...}` lines to extract `chunk.choices[0].delta.content`.
+- Incorporates robust exponential backoff logic (3 retries).
+
+### 3. Health Check Endpoints
+#### [MODIFY] `apps/api/src/health.controller.ts`
+Enhance the health module to include:
+- `GET /health/ai` which fires a lightweight ping (generating 1 token) via the `LLMRouterService` to verify the active LLM provider.
+- `GET /health/ai/test-stream` a temporary endpoint to pipe the `AsyncIterable<string>` back to the HTTP response to visibly confirm streaming latency natively to the browser.
+
+### 4. Configuration
+#### [MODIFY] `apps/api/.env`
+Define necessary environment variables:
+- `ACTIVE_LLM_PROVIDER=ollama`
+- `OLLAMA_URL=http://localhost:11434`
+- `OLLAMA_MODEL=llama3:latest`
+- `GROQ_API_KEY=`
+
+## Verification Plan
+
+### Automated / Manual Verification
+1. Call `GET /health/ai` via `curl` to observe the health status and check if the API is communicating properly with your local RTX 4050 GPU.
+2. Hit the test stream via browser `GET /health/ai/test-stream` to visibly see tokens streaming out in real-time.
+3. Once Ollama is verified, we can quickly toggle `ACTIVE_LLM_PROVIDER=groq`, supply a dummy API key, and confirm that the API router attempts to parse the OpenAI completion stream correctly.
