@@ -1,0 +1,131 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Tenant {
+  id            String           @id @default(cuid())
+  name          String
+  subdomain     String           @unique
+  plan          String           @default("starter")
+  apiKey        String           @unique @default(cuid())
+  createdAt     DateTime         @default(now())
+  users         User[]
+  configs       IndustryConfig[]
+  conversations Conversation[]
+  leads         Lead[]
+}
+
+model IndustryConfig {
+  id               String         @id @default(cuid())
+  tenantId         String
+  tenant           Tenant         @relation(fields: [tenantId], references: [id])
+  industryName     String
+  personaName      String
+  personaRole      String
+  greeting         String
+  tone             String         @default("professional")
+  fieldsJson       Json           // QualificationField[]
+  scoringRulesJson Json           // ScoringRule[]
+  isActive         Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  conversations    Conversation[]
+
+  @@index([tenantId])
+}
+
+model User {
+  id           String           @id @default(cuid())
+  tenantId     String
+  tenant       Tenant           @relation(fields: [tenantId], references: [id])
+  name         String
+  email        String           @unique
+  role         String           @default("REP")  // ADMIN | REP
+  passwordHash String
+  lastLogin    DateTime?
+  assignments  LeadAssignment[]
+
+  @@index([tenantId])
+}
+
+model Conversation {
+  id            String          @id @default(cuid())
+  tenantId      String
+  tenant        Tenant          @relation(fields: [tenantId], references: [id])
+  configId      String
+  config        IndustryConfig  @relation(fields: [configId], references: [id])
+  sessionToken  String          @unique @default(cuid())
+  status        String          @default("GREETING")
+  channel       String          @default("chat")
+  startedAt     DateTime        @default(now())
+  completedAt   DateTime?
+  messages      Message[]
+  extractedData ExtractedData[]
+  lead          Lead?
+
+  @@index([tenantId])
+  @@index([configId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         String       // 'user' | 'ai'
+  content        String
+  tokenCount     Int?
+  timestamp      DateTime     @default(now())
+
+  @@index([conversationId])
+}
+
+model ExtractedData {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  fieldKey       String
+  fieldValue     String?
+  confidence     Float
+  extractedAt    DateTime     @default(now())
+
+  @@index([conversationId])
+}
+
+model Lead {
+  id             String           @id @default(cuid())
+  conversationId String           @unique
+  conversation   Conversation     @relation(fields: [conversationId], references: [id])
+  tenantId       String
+  tenant         Tenant           @relation(fields: [tenantId], references: [id])
+  contactName    String?
+  contactEmail   String?
+  contactPhone   String?
+  score          Float
+  tier           String           // 'HOT' | 'WARM' | 'COLD'
+  status         String           @default("NEW")
+  summary        String
+  createdAt      DateTime         @default(now())
+  assignments    LeadAssignment[]
+
+  @@index([tenantId])
+  @@index([tier])
+  @@index([status])
+}
+
+model LeadAssignment {
+  id         String   @id @default(cuid())
+  leadId     String
+  lead       Lead     @relation(fields: [leadId], references: [id])
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  assignedAt DateTime @default(now())
+  notes      String?
+  status     String   @default("ACTIVE")
+
+  @@index([leadId])
+  @@index([userId])
+}
