@@ -1,0 +1,67 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * Ladeway Design System — Global Styles
+ *
+ * Theme: Classic, premium, enterprise
+ * Colors: Deep navy primary, warm off-white background, muted brass accent
+ * Typography: Inter — bold headings, regular body
+ * Motion: 150ms ease transitions only
+ */
+
+@layer base {
+  :root {
+    --color-primary: #1F4E79;
+    --color-secondary: #64748B;
+    --color-background: #FAFAF9;
+    --color-accent: #B45309;
+    --color-success: #15803D;
+    --color-warning: #B45309;
+    --color-neutral: #64748B;
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  html {
+    font-family: var(--font-sans);
+    background-color: var(--color-background);
+    color: #1E293B;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    min-height: 100vh;
+  }
+
+  /* Premium typography scale */
+  h1 {
+    @apply text-3xl font-bold tracking-tight;
+  }
+
+  h2 {
+    @apply text-2xl font-semibold tracking-tight;
+  }
+
+  h3 {
+    @apply text-xl font-semibold;
+  }
+
+  h4 {
+    @apply text-lg font-medium;
+  }
+
+  p {
+    @apply text-base leading-relaxed;
+  }
+}
+
+@layer components {
+  /* Transition utility — enforces 150ms ease spec-wide */
+  .transition-default {
+    @apply transition-all duration-150 ease-in-out;
+  }
+}
