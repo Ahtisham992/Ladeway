@@ -16,6 +16,8 @@
  */
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { DatabaseModule } from './database/database.module';
+import { TenantModule } from './tenant/tenant.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -25,6 +27,8 @@ import { HealthController } from './health.controller';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    DatabaseModule,
+    TenantModule,
   ],
   controllers: [HealthController],
   providers: [],

@@ -1,0 +1,139 @@
+# Phase 2 — Database Schema, Prisma & Migrations
+
+This phase implements the complete database schema for Ladeway, applying the models from Section 11 of the Specification and configuring the Prisma ORM for use within the NestJS API.
+
+## Open Questions
+
+> [!IMPORTANT]
+> **Database Provisioning**
+> The plan calls for a free Supabase project to host the PostgreSQL database. I do not have access to create a Supabase account on your behalf. 
+> 
+> Please choose one of the following options:
+> 1. **(Recommended)** You can create a free Supabase project at https://supabase.com, get the connection string (Transaction pooler string for `DATABASE_URL` and Session string for `DIRECT_URL`), and provide them to me. I will store them in `apps/api/.env`.
+> 2. Alternatively, if you have Docker Desktop installed and running, I can set up a local `docker-compose.yml` to spin up a local PostgreSQL database for development purposes. Let me know if you prefer this route.
+
+## Proposed Changes
+
+### Database Layer Setup (Prisma)
+
+#### [NEW] [schema.prisma](file:///d:/logistics/apps/api/prisma/schema.prisma)
+Initialise Prisma in `apps/api` and implement the complete schema with 8 tables:
+- `Tenant`
+- `IndustryConfig`
+- `User`
+- `Conversation`
+- `Message`
+- `ExtractedData`
+- `Lead`
+- `LeadAssignment`
+This will exactly match the schema provided in Section 11 of the architecture specification, including proper relationships, cascade deletions, and index configurations.
+
+### Database Seeding
+
+#### [NEW] [seed.ts](file:///d:/logistics/apps/api/prisma/seed.ts)
+Implement the seed script to populate the database with:
+- A test `Tenant`
+- Two `IndustryConfig` records (Logistics and Real Estate) showcasing the industry-agnostic configuration capability.
+- A test `User` (Admin/Rep role) for dashboard access.
+
+### NestJS Integration
+
+#### [NEW] [database.module.ts](file:///d:/logistics/apps/api/src/database/database.module.ts)
+Create the NestJS `DatabaseModule` to export the Prisma service globally.
+
+#### [NEW] [prisma.service.ts](file:///d:/logistics/apps/api/src/database/prisma.service.ts)
+Implement the `PrismaService` singleton for interacting with the database. This pattern prevents connection pool exhaustion in persistent Node.js servers and manages connection lifecycle hooks.
+
+#### [MODIFY] [app.module.ts](file:///d:/logistics/apps/api/src/app.module.ts)
+Import the `DatabaseModule` into the root application module.
+
+#### [MODIFY] [package.json](file:///d:/logistics/apps/api/package.json)
+Add standard Prisma scripts: `migrate dev`, `db seed`, etc. Ensure `@prisma/client` is correctly installed.
+
+## Verification Plan
+
+### Automated Steps
+- Run `npx prisma format` to validate the syntax of `schema.prisma`.
+- Run `npx prisma migrate dev --name init` to verify the schema can be applied successfully.
+- Run `npx prisma db seed` to insert the initial tenant, configs, and users without relational constraint errors.
+- Run `npm run type-check` to ensure the generated Prisma Client types are clean and resolvable.
+
+### Manual Verification
+- Acknowledge that the Prisma Studio (`npx prisma studio`) successfully displays all tables and foreign key relations.
+
+
+
+
+
+
+
+# Phase 3 — Row-Level Security & Multi-Tenant Isolation
+
+This phase enforces multi-tenancy at the database layer using PostgreSQL Row-Level Security (RLS). This ensures that even if application code inadvertently omits a `tenant_id` filter, cross-tenant data leakage is fundamentally impossible at the database engine level.
+
+## Open Questions
+
+> [!NOTE]
+> **Prisma & RLS Implementation Details**
+> To set `app.current_tenant_id` on the PostgreSQL connection per request using Prisma, the standard modern approach is to combine **NestJS AsyncLocalStorage (ALS)** (to track the tenant ID across the async request lifecycle) with **Prisma Client Extensions**. 
+> Specifically, we will create a method on `PrismaService` (e.g., `this.prisma.withTenant()`) or intercept queries using `$extends` to execute `SELECT set_config('app.current_tenant_id', tenantId, true)` in a lightweight transaction alongside the main query.
+> Does this align with your architectural expectations for the NestJS implementation?
+
+## Proposed Changes
+
+### Database RLS Migration
+
+#### [NEW] `prisma/migrations/XXXXXXXXXXXXXX_rls/migration.sql`
+Create a raw SQL migration to enable RLS and apply the isolation policy to all tenant-scoped tables:
+- `Tenant` (Wait, Tenant table is usually global, but we can secure it or leave it as bypass)
+- `IndustryConfig`
+- `User`
+- `Conversation`
+- `Message`
+- `ExtractedData`
+- `Lead`
+- `LeadAssignment`
+
+The policy will look like:
+```sql
+ALTER TABLE "Conversation" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON "Conversation"
+  USING ("tenantId" = current_setting('app.current_tenant_id', true));
+-- (Applied to all scoped tables)
+```
+*Note: We will also apply a bypass or `BYPASSRLS` role for the initial seeds/admin tasks if necessary, or conditionally apply it.*
+
+### NestJS Middleware & Context
+
+#### [NEW] `src/tenant/tenant.context.ts`
+Implement `AsyncLocalStorage` to store the `tenantId` for the current request lifecycle.
+
+#### [NEW] `src/tenant/tenant.middleware.ts`
+Implement `TenantMiddleware`. This middleware will:
+1. Extract the `tenantId` from the JWT (or `sessionToken` for public routes, though auth comes in Phase 4). For now, it will look for a `x-tenant-id` header or subdomain to establish context.
+2. Store the `tenantId` in the `AsyncLocalStorage` context.
+
+#### [NEW] `src/tenant/tenant.module.ts`
+Create the `TenantModule` and register the middleware globally.
+
+### Prisma RLS Extension
+
+#### [MODIFY] `src/database/prisma.service.ts`
+Update `PrismaService` to use a Prisma Client Extension that automatically injects `set_config('app.current_tenant_id', ...)` before executing queries when a tenant context is present.
+
+### Cross-Tenant Isolation Test
+
+#### [NEW] `src/tenant/tenant.isolation.spec.ts`
+Write an integration test to verify RLS:
+1. Create two tenants and data for both.
+2. Authenticate as Tenant A (set context).
+3. Attempt to query Tenant B's data directly without a `WHERE` clause.
+4. Verify the database returns 0 rows.
+
+## Verification Plan
+
+### Automated Tests
+- Run `npm run test` targeting the new `tenant.isolation.spec.ts` to mathematically prove that cross-tenant leakage is blocked at the database layer.
+
+### Manual Verification
+- We will start the development server, seed a second tenant, and manually attempt to fetch the second tenant's data using the first tenant's context via a temporary endpoint.
