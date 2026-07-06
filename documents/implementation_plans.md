@@ -253,3 +253,173 @@ Define necessary environment variables:
 1. Call `GET /health/ai` via `curl` to observe the health status and check if the API is communicating properly with your local RTX 4050 GPU.
 2. Hit the test stream via browser `GET /health/ai/test-stream` to visibly see tokens streaming out in real-time.
 3. Once Ollama is verified, we can quickly toggle `ACTIVE_LLM_PROVIDER=groq`, supply a dummy API key, and confirm that the API router attempts to parse the OpenAI completion stream correctly.
+
+
+
+
+
+# Phase 6 — Industry Config Module & Validation
+
+This phase introduces the central nervous system for Ladeway's AI behaviors: the `IndustryConfig`. This module handles the creation, validation, and retrieval of configuration sets (like `QualificationField` arrays and `ScoringRule` definitions) that the LLM will use to drive conversations.
+
+## Proposed Changes
+
+### 1. Configuration Validation Layer
+#### [NEW] `apps/api/src/industry-config/schemas/config.schema.ts`
+Implement robust Zod schemas matching `packages/types` to validate `fieldsJson` and `scoringRulesJson` structures at write-time.
+- `QualificationFieldSchema`:
+  ```typescript
+  z.object({
+    key: z.string().min(1),
+    label: z.string().min(1),
+    type: z.enum(['text', 'number', 'date', 'enum']),
+    required: z.boolean(),
+    options: z.array(z.string()).optional(),
+    extractionHint: z.string().min(1),
+  })
+  ```
+- `ScoringRuleSchema`:
+  ```typescript
+  z.object({
+    field: z.string().min(1),
+    condition: z.enum(['present', 'equals', 'greater_than', 'less_than', 'in']),
+    value: z.union([z.string(), z.number(), z.array(z.string())]).optional(),
+    weight: z.number().min(0).max(1),
+    tier: z.enum(['HOT', 'WARM', 'COLD']).optional(),
+  })
+  ```
+
+### 2. Configuration Infrastructure
+#### [NEW] `apps/api/src/industry-config/industry-config.module.ts`
+Create the NestJS `IndustryConfigModule` and integrate it with `@nestjs/cache-manager` using the in-memory store (to be seamlessly swapped for Redis in Phase 7).
+
+#### [NEW] `apps/api/src/industry-config/industry-config.service.ts`
+Implement `IndustryConfigService` handling database operations:
+- **CRUD Operations**: Standard create, retrieve, update, delete functionality leveraging the multi-tenant Prisma extension.
+- **`getActiveConfig(id)`**: Fetches the configuration with a 5-minute cache TTL.
+- **Deletion Guard**: Ensures `DELETE` operations abort with an error if the config is tied to active `Conversation` records.
+
+#### [NEW] `apps/api/src/industry-config/industry-config.controller.ts`
+Expose the REST API for reps/admins (protected via `JwtAuthGuard` and `RolesGuard`):
+- `GET /industry-configs`
+- `POST /industry-configs` (Runs Zod validation, returns 422 on failure)
+- `GET /industry-configs/:id`
+- `PUT /industry-configs/:id` (Runs Zod validation, returns 422 on failure)
+- `DELETE /industry-configs/:id`
+- `GET /industry-configs/:id/preview` (ADMIN role only: calls `LLMRouterService.stream()` with a single test message "Hello, I'm interested in your services" and returns the plain text response without saving any `Conversation` records).
+
+### 3. Application Registration
+#### [MODIFY] `apps/api/src/app.module.ts`
+Import and register the newly created `IndustryConfigModule` (and globally register the Cache module).
+
+## Verification Plan
+
+### Automated / Manual Verification
+1. I will write an integration test script to send a `POST /industry-configs` request with a malformed `fieldsJson` payload. We will verify that it strictly throws a `422 Unprocessable Entity` with specific field-level validation messages.
+2. I will insert a valid config, then call `getActiveConfig(id)` twice. The first call will hit Prisma, and the second call will instantly return from the cache.
+3. Finally, I will hit `GET /industry-configs/:id/preview` to verify the LLM seamlessly responds based on the dynamically loaded config parameters without polluting the database.
+
+
+
+
+# Phase 7 — Redis Session Service
+
+This phase establishes the high-speed state management layer for Ladeway's AI conversations using Upstash Redis. Real-time chat requires sub-millisecond read/write latency to maintain context without hitting the relational database on every keystroke or token.
+
+## Proposed Changes
+
+### 1. Redis Infrastructure
+#### [NEW] `apps/api/src/redis/redis.module.ts`
+Implement `@upstash/redis` natively to guarantee ultra-low latency direct Redis access (crucial for Phase 10 conversation streaming).
+- Configure the Upstash Redis client globally utilizing the provided URL (`https://still-crab-125644.upstash.io`) and Token.
+
+#### [MODIFY] `apps/api/.env`
+Add `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`.
+
+### 2. Session Management Layer
+#### [NEW] `apps/api/src/session/types/session.types.ts`
+Define the strict TypeScript interfaces conforming to the `packages/types` shared spec:
+- `ConversationStatus` enum: `GREETING`, `QUALIFYING`, `EXTRACTING`, `SCORED`, `CLOSED`, `TRANSFERRED`, `ABANDONED`.
+- `ConversationSession` interface:
+  ```typescript
+  interface ConversationSession {
+    conversationId: string
+    tenantId: string
+    configId: string
+    status: ConversationStatus
+    capturedFields: Record<string, string>
+    missingFields: string[]
+    turnCount: number
+    lastActivityAt: string
+  }
+  ```
+
+#### [NEW] `apps/api/src/session/session.module.ts`
+Create the `SessionModule` to encapsulate all high-speed state interactions.
+
+#### [NEW] `apps/api/src/session/session.service.ts`
+Implement `SessionService` utilizing the injected `@upstash/redis` client:
+- `createSession(conversationId: string, configId: string, tenantId: string): Promise<void>`
+- `getSession(sessionToken: string): Promise<ConversationSession | null>`
+- `updateCapturedFields(sessionToken: string, fields: Record<string, string>): Promise<void>`
+- `updateStatus(sessionToken: string, status: ConversationStatus): Promise<void>`
+- `deleteSession(sessionToken: string): Promise<void>`
+
+### 3. TTL & Expiration Logic
+Enforce a 24-hour Time-to-Live (TTL) on all session keys created within `createSession()`. This ensures that abandoned chat widgets auto-expire and don't permanently leak memory.
+
+### 4. Application Registration
+#### [MODIFY] `apps/api/src/app.module.ts`
+Import and register the newly created `SessionModule` (which leverages the Upstash client).
+
+## Verification Plan
+
+### Automated / Manual Verification
+1. Write a test script that executes `createSession()`, instantly followed by `getSession()`.
+2. Measure the latency of `getSession()` to confirm it resolves in < 5ms.
+3. Test `getSession()` with a non-existent token to verify it gracefully returns `null`.
+
+
+
+
+# Phase 8 — Prompt Engineering Service
+
+This phase constructs the `PromptService`, the critical bridge between our strictly typed configuration/session state and the raw text-based AI models. It is responsible for consistently assembling high-quality, industry-agnostic prompts ensuring the AI behaves exactly according to the active `IndustryConfig`.
+
+## Open Questions
+
+> [!NOTE]  
+> **Extraction Schema Definition**  
+> The `assembleExtractionPrompt` method expects the LLM to output structured JSON data. To guarantee the LLM formats its output correctly, I will explicitly inject the JSON Schema of the missing fields into the extraction prompt. Do you have a preferred JSON output schema (e.g. `{ "key": "value" }` or `{ "extractedFields": [{ "key": "...", "value": "..." }] }`) that Phase 11 will expect? I plan to default to a flat `{ "field_key": "extracted_value" }` format for simplicity.
+
+## Proposed Changes
+
+### 1. Prompt Engineering Service
+#### [NEW] `apps/api/src/ai/prompt.service.ts`
+Implement the `PromptService` within the existing `AIModule`:
+
+- **`assembleConversationPrompt(config: IndustryConfig, session: ConversationSession, messages: Message[]): any[]`**
+  - **System Prompt**: Constructs the robust system context utilizing `config.personaName`, `config.personaRole`, `config.industryName`, and `config.tone`.
+  - **Field State Injection**: Iterates over `config.fieldsJson` and specifically lists the `session.missingFields` directly into the system prompt to guide the LLM's next questions. It also injects already `capturedFields` to provide context and avoid repetition.
+  - **Rules**: Embeds standard behavioral instructions (e.g., "Ask only one question at a time", "Do not break character").
+  - **Output**: Returns an array of OpenAI-compatible message objects: `[{ role: 'system', content: ... }, ...history, { role: 'user', content: ... }]`.
+
+- **`assembleExtractionPrompt(config: IndustryConfig, session: ConversationSession, recentMessages: Message[]): any[]`**
+  - Builds an isolated prompt focused solely on data extraction.
+  - Instructs the LLM to analyze the recent conversation context and output a strict JSON object mapping any newly discovered `session.missingFields` based on the `config.fieldsJson` extraction hints.
+
+### 2. Module Registration
+#### [MODIFY] `apps/api/src/ai/ai.module.ts`
+Register `PromptService` as a provider and export it so that the Conversation API (Phase 10) and Extractor Service (Phase 11) can securely utilize it.
+
+### 3. Unit Testing (Zero Conditional Logic)
+#### [NEW] `apps/api/src/ai/prompt.service.spec.ts`
+Implement robust Jest unit tests verifying the exact same code path produces vastly different prompts when fed different configs.
+1. **Logistics Test**: Pass an 'Alexandra' logistics config and verify the output references logistics fields and freight terminology.
+2. **Real Estate Test**: Pass a 'Sarah' real estate config and verify the exact same function dynamically generates a prompt referencing property inquiries and real estate terminology without any internal `if (industry === 'Logistics')` logic.
+
+## Verification Plan
+
+### Automated / Manual Verification
+1. I will execute `npm run test` targeting `prompt.service.spec.ts` to mathematically prove the prompts are assembled correctly based on strictly mocked inputs.
+2. We will ensure there are zero parsing errors or missing template variables (e.g., no raw `${undefined}` strings) inside the assembled payload.

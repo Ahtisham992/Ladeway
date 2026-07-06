@@ -21,6 +21,10 @@ import { TenantModule } from './tenant/tenant.module';
 import { AuthModule } from './auth/auth.module';
 import { AIModule } from './ai/ai.module';
 import { HealthController } from './health.controller';
+import { CacheModule } from '@nestjs/cache-manager';
+import { IndustryConfigModule } from './industry-config/industry-config.module';
+import { RedisModule } from './redis/redis.module';
+import { SessionModule } from './session/session.module';
 
 @Module({
   imports: [
@@ -29,10 +33,16 @@ import { HealthController } from './health.controller';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    CacheModule.register({
+      isGlobal: true,
+    }),
     DatabaseModule,
     TenantModule,
     AuthModule,
     AIModule,
+    IndustryConfigModule,
+    RedisModule,
+    SessionModule,
   ],
   controllers: [HealthController],
   providers: [],
