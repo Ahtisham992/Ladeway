@@ -25,6 +25,9 @@ import { CacheModule } from '@nestjs/cache-manager';
 import { IndustryConfigModule } from './industry-config/industry-config.module';
 import { RedisModule } from './redis/redis.module';
 import { SessionModule } from './session/session.module';
+import { ScheduleModule } from '@nestjs/schedule';
+import { QualificationModule } from './qualification/qualification.module';
+import { ConversationModule } from './conversation/conversation.module';
 
 @Module({
   imports: [
@@ -43,6 +46,9 @@ import { SessionModule } from './session/session.module';
     IndustryConfigModule,
     RedisModule,
     SessionModule,
+    ScheduleModule.forRoot(),
+    QualificationModule,
+    ConversationModule,
   ],
   controllers: [HealthController],
   providers: [],

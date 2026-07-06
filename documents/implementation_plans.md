@@ -423,3 +423,258 @@ Implement robust Jest unit tests verifying the exact same code path produces vas
 ### Automated / Manual Verification
 1. I will execute `npm run test` targeting `prompt.service.spec.ts` to mathematically prove the prompts are assembled correctly based on strictly mocked inputs.
 2. We will ensure there are zero parsing errors or missing template variables (e.g., no raw `${undefined}` strings) inside the assembled payload.
+
+
+
+
+# Phase 9 — Conversation State Machine
+
+The state machine is the brain that decides what happens next in every conversation turn. Given the current `ConversationSession` (from Redis) and the `IndustryConfig`, it evaluates field capture progress, detects escalation intent, and returns a single `QualificationAction` that Phase 10's conversation loop will act on.
+
+## Proposed Changes
+
+### 1. Types (already created)
+#### [NEW] `apps/api/src/qualification/types/qualification.types.ts`
+Defines the `QualificationAction` enum with four values:
+- `CONTINUE_QUALIFYING` — more fields still needed, keep asking
+- `TRIGGER_EXTRACTION` — enough raw conversation to attempt structured JSON extraction
+- `TRIGGER_TRANSFER` — user explicitly requested a human
+- `CLOSE_CONVERSATION` — all required fields captured
+
+---
+
+### 2. Core Engine
+#### [NEW] `apps/api/src/qualification/qualification-engine.service.ts`
+The `QualificationEngineService` with one primary method:
+
+```typescript
+getNextAction(session: ConversationSession, config: IndustryConfig, lastUserMessage?: string): QualificationAction
+```
+
+**Decision logic (evaluated in this priority order):**
+
+1. **Escalation check** — If `lastUserMessage` matches escalation intent → `TRIGGER_TRANSFER`
+2. **All fields captured** — If `session.missingFields.length === 0` → `CLOSE_CONVERSATION`
+3. **Extraction threshold** — If `session.turnCount >= 2` AND `session.turnCount % 2 === 0` (every 2 turns), trigger an extraction pass → `TRIGGER_EXTRACTION`
+4. **Default** — `CONTINUE_QUALIFYING`
+
+> [!NOTE]
+> The extraction trigger runs every 2 turns rather than every turn. This avoids burning LLM tokens on extraction when the user has only said "hi" or given a one-word answer. Phase 10 will call extraction when it gets `TRIGGER_EXTRACTION`, then update `missingFields` based on results. If all fields fill up, the next call returns `CLOSE_CONVERSATION`.
+
+**Escalation intent detection** — keyword-based with a curated list:
+```typescript
+private readonly ESCALATION_KEYWORDS = [
+  'speak to a human',
+  'talk to a person',
+  'transfer me',
+  'real person',
+  'human agent',
+  'speak to someone',
+  'talk to someone',
+  'connect me',
+  'representative',
+  'manager',
+  'supervisor',
+];
+```
+Uses case-insensitive substring matching. This is deliberately simple and deterministic — the spec mentions "LLM-based detection for ambiguous cases" but that belongs in Phase 15 (Escalation). For Phase 9, keyword matching catches the explicit cases cleanly.
+
+---
+
+### 3. Abandonment Cron Job
+#### [NEW] `apps/api/src/qualification/abandonment-cron.service.ts`
+A NestJS `@Cron` job that runs hourly to find and mark stale conversations:
+
+- Queries PostgreSQL for conversations where `status NOT IN ('CLOSED', 'TRANSFERRED', 'ABANDONED')` AND `startedAt < NOW() - INTERVAL '24 hours'`
+- For each stale conversation:
+  - Updates `Conversation.status` to `ABANDONED` in PostgreSQL
+  - Deletes the Redis session (cleanup)
+- Logs the count of abandoned conversations
+
+> [!IMPORTANT]
+> The spec mentions "triggers partial extraction if ≥50% of fields were captured." This requires the `ExtractorService` from Phase 11 which doesn't exist yet. I will add a `// TODO: Phase 11 — trigger partial extraction` placeholder and wire it in during Phase 11. The abandonment marking itself works independently.
+
+---
+
+### 4. Module Registration
+#### [NEW] `apps/api/src/qualification/qualification.module.ts`
+Creates `QualificationModule`, imports `SessionModule` and `ScheduleModule`, provides and exports `QualificationEngineService` and `AbandonmentCronService`.
+
+#### [MODIFY] `apps/api/src/app.module.ts`
+Register `QualificationModule` and `ScheduleModule.forRoot()` (from `@nestjs/schedule` for cron support).
+
+---
+
+### 5. Unit Tests
+#### [NEW] `apps/api/src/qualification/qualification-engine.service.spec.ts`
+Pure unit tests (no DI needed — the engine is stateless logic):
+
+| Test | Input | Expected Output |
+|---|---|---|
+| Escalation phrase | `lastUserMessage = "I want to speak to a human"` | `TRIGGER_TRANSFER` |
+| All fields captured | `missingFields = []` | `CLOSE_CONVERSATION` |
+| Extraction threshold met | `turnCount = 4, missingFields = ['origin']` | `TRIGGER_EXTRACTION` |
+| Early conversation | `turnCount = 1, missingFields = ['origin']` | `CONTINUE_QUALIFYING` |
+| Escalation takes priority over completion | `missingFields = [], lastUserMessage = "transfer me"` | `TRIGGER_TRANSFER` |
+
+## Open Questions
+
+> [!NOTE]
+> **Extraction frequency**: I've proposed triggering extraction every 2 turns. If you'd prefer a different cadence (every turn, every 3 turns, or only after a minimum turn count), let me know.
+
+## Verification Plan
+
+### Automated Tests
+- `npx jest qualification-engine.service.spec.ts` — all 5 state transition tests pass
+
+### Manual Verification
+- `npm run type-check` — zero TypeScript errors
+- Verify NestJS app bootstraps cleanly with the new module and cron scheduler registered
+
+
+
+# Phase 10 — Conversation Start & Message API
+
+This is the integration phase. Every service built in Phases 5–9 gets wired into two public REST endpoints that a chat widget (Phase 19) will call. No JWT auth — these are public-facing endpoints identified by `sessionToken`.
+
+## Proposed Changes
+
+### 1. Conversation Service
+#### [NEW] `apps/api/src/conversation/conversation.service.ts`
+
+The orchestration layer. Two primary methods:
+
+**`startConversation(configId: string): Promise<StartConversationResponse>`**
+1. Load config via `IndustryConfigService.getActiveConfig(configId)` — validates the config exists and is active
+2. Create `Conversation` row in PostgreSQL with `tenantId` from the config (since this is a public route, tenant comes from the config, not JWT)
+3. Compute `missingFields` from `config.fieldsJson` — extract all `key` values where `required: true`
+4. Create Redis session via `SessionService.createSession(sessionToken, conversationId, configId, tenantId)` and immediately set `missingFields`
+5. Build greeting prompt via `PromptService.assembleConversationPrompt(config, session, [])` — empty message history for initial greeting
+6. Collect the full streamed greeting (non-streaming for the start endpoint — collect all tokens into a single string)
+7. Persist the AI greeting as a `Message` in PostgreSQL (sender: `'ai'`)
+8. Update session status to `QUALIFYING` and increment turn count
+9. Return `{ conversationId, sessionToken, greeting }`
+
+**`sendMessage(sessionToken: string, userMessage: string): AsyncIterable<SSEEvent>`**
+1. Load session from Redis — if `null`, throw 404
+2. Load config via `IndustryConfigService.getActiveConfig(session.configId)`
+3. Persist user message to PostgreSQL (sender: `'user'`)
+4. Load conversation history from PostgreSQL (last N messages, capped at ~20 for context window)
+5. Build prompt via `PromptService.assembleConversationPrompt(config, session, history)`
+6. Stream response from `LLMRouterService.stream(prompt)` — yield each token as an SSE `event: token`
+7. After stream completes:
+   - Persist AI response to PostgreSQL (sender: `'ai'`)
+   - Increment session turn count
+   - Call `QualificationEngineService.getNextAction(session, config, userMessage)`
+   - If action is `TRIGGER_EXTRACTION`: *(placeholder — Phase 11 will wire this)*
+   - If action is `TRIGGER_TRANSFER`: update session status to `TRANSFERRED`
+   - If action is `CLOSE_CONVERSATION`: update session status to `CLOSED`
+8. Yield final SSE `event: done` with updated session state
+
+> [!IMPORTANT]
+> **RLS bypass for public routes**: The conversation endpoints are public (no JWT). The `TenantMiddleware` correctly calls `next()` when no tenant is found, which means RLS via `tenantContext` won't be active. However, the `ConversationService` knows the `tenantId` from the config/session. For PostgreSQL writes (creating conversations, persisting messages), the service must explicitly pass `tenantId` in the data payload. For reads, we query by `sessionToken` (unique) or `conversationId` (primary key), so RLS is not needed for correctness — the tokens themselves act as the access control.
+
+---
+
+### 2. Conversation Controller
+#### [NEW] `apps/api/src/conversation/conversation.controller.ts`
+
+Two endpoints, both public (no `@UseGuards(JwtAuthGuard)`):
+
+**`POST /conversations/start`**
+- Body: `{ configId: string }`
+- Returns: `{ conversationId, sessionToken, greeting }`
+- Standard JSON response (not streamed)
+
+**`POST /conversations/:id/message`**
+- Body: `{ sessionToken: string, message: string }`
+- Returns: SSE stream with NestJS `@Sse()` decorator or raw `res.write()` for manual SSE control
+- SSE events:
+  ```
+  event: token
+  data: {"content": "Hello"}
+
+  event: token
+  data: {"content": " there"}
+
+  event: done
+  data: {"status": "QUALIFYING", "turnCount": 2}
+
+  event: error
+  data: {"message": "LLM unavailable"}
+  ```
+
+> [!NOTE]
+> **SSE implementation approach**: NestJS's `@Sse()` decorator returns an `Observable`, but our `LLMRouterService.stream()` returns an `AsyncIterable`. I will use manual SSE via `@Res()` and `res.write()` for precise control over the event format, flush timing, and error handling. This avoids the Observable conversion overhead and gives us exact control over when `event: done` fires after post-stream processing.
+
+---
+
+### 3. SSE Event Types
+#### [NEW] `apps/api/src/conversation/types/conversation.types.ts`
+
+```typescript
+interface StartConversationDto {
+  configId: string;
+}
+
+interface SendMessageDto {
+  sessionToken: string;
+  message: string;
+}
+
+interface StartConversationResponse {
+  conversationId: string;
+  sessionToken: string;
+  greeting: string;
+}
+```
+
+---
+
+### 4. Module Registration
+#### [NEW] `apps/api/src/conversation/conversation.module.ts`
+Imports: `AIModule`, `SessionModule`, `IndustryConfigModule`, `QualificationModule`, `DatabaseModule`
+
+#### [MODIFY] `apps/api/src/app.module.ts`
+Register `ConversationModule`
+
+---
+
+### 5. Message History Cap
+
+> [!NOTE]
+> **Context window management**: The conversation history sent to the LLM will be capped at the **last 20 messages** (10 user + 10 AI turns). This prevents prompt size from growing unbounded on long conversations. The full history remains in PostgreSQL for audit/analytics, but only the recent window is sent to the LLM.
+
+---
+
+## Open Questions
+
+> [!IMPORTANT]
+> **Greeting generation — streamed or collected?**
+> The `POST /conversations/start` endpoint needs to return the AI greeting. Two options:
+> 1. **Collect and return as JSON** (proposed): Simpler for the client — one HTTP request, one JSON response with `greeting` field. The client renders it immediately.
+> 2. **Stream as SSE**: More complex for the client to handle on the start endpoint.
+>
+> I'm proposing option 1 since the greeting is typically short (1-2 sentences) and doesn't benefit from the perceived speed of streaming. The `/message` endpoint is where streaming matters.
+
+> [!NOTE]
+> **Extraction wiring**: The plan includes a `TRIGGER_EXTRACTION` placeholder. Phase 11 (Structured Data Extractor) will fill this in. For now, when `getNextAction()` returns `TRIGGER_EXTRACTION`, the service will simply log it and continue qualifying.
+
+## Verification Plan
+
+### Manual Verification
+1. `npm run type-check` — zero errors
+2. Start the dev server, then test the full flow with curl:
+   ```bash
+   # Step 1: Start conversation
+   curl -X POST http://localhost:3001/conversations/start \
+     -H "Content-Type: application/json" \
+     -d '{"configId": "<seeded-config-id>"}'
+
+   # Step 2: Send message (SSE stream)
+   curl -N -X POST http://localhost:3001/conversations/<id>/message \
+     -H "Content-Type: application/json" \
+     -d '{"sessionToken": "<token>", "message": "I need to ship freight from NYC to London"}'
+   ```
+3. Verify messages appear in PostgreSQL after the stream completes
+4. Verify Redis session is updated with new turn count
