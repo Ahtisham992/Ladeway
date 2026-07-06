@@ -137,3 +137,67 @@ Write an integration test to verify RLS:
 
 ### Manual Verification
 - We will start the development server, seed a second tenant, and manually attempt to fetch the second tenant's data using the first tenant's context via a temporary endpoint.
+
+
+
+
+# Phase 4 — Authentication & Authorization (NestJS)
+
+This phase establishes the security foundation for the application. We will implement robust JWT-based authentication and role-based access control (RBAC) in NestJS, and build the initial login page in the Next.js frontend to prove end-to-end connectivity.
+
+## Open Questions
+
+> [!NOTE]
+> **Authentication Token Transport**
+> For secure single-page applications, it's a standard practice to store the JWT inside an `HttpOnly` cookie to prevent XSS attacks from extracting the token. However, standard APIs often just return the JWT in the JSON response body.
+> Do you prefer the JWT to be returned purely in the JSON response (simpler API consumption), or should the backend automatically set it as an `HttpOnly` cookie for the Next.js frontend to use implicitly? 
+> *(Recommendation: Return in JSON for now; Next.js Server Actions can securely store it in an HttpOnly cookie on the frontend side).*
+
+## Proposed Changes
+
+### 1. API Dependency Installation
+Install security packages:
+- `@nestjs/passport`, `@nestjs/jwt`, `passport`, `passport-jwt`
+- `bcrypt`, `@types/bcrypt`
+
+### 2. NestJS Authentication
+#### [NEW] `apps/api/src/auth/auth.module.ts`
+Implement `AuthModule` bundling the JWT and Passport dependencies.
+
+#### [NEW] `apps/api/src/auth/auth.service.ts`
+Implement `AuthService` handling:
+- `validateUser(email, password)`: Verify credentials against bcrypt (cost factor 12).
+- `login(user)`: Generate JWT payload: `{ sub: userId, tenantId, role, iat, exp }`.
+
+#### [NEW] `apps/api/src/auth/strategies/jwt.strategy.ts`
+Implement `JwtStrategy` to parse the `Authorization: Bearer <token>` header (or cookie, depending on preference).
+
+#### [NEW] `apps/api/src/auth/auth.controller.ts`
+Implement `AuthController` exposing:
+- `POST /auth/login`: Accepts `{ email, password }`.
+- `POST /auth/logout`: Invalidates the token (or clears cookie).
+
+### 3. NestJS Authorization Guards
+#### [NEW] `apps/api/src/auth/guards/jwt-auth.guard.ts`
+Implement `JwtAuthGuard` to protect authenticated endpoints.
+
+#### [NEW] `apps/api/src/auth/guards/roles.guard.ts`
+Implement `RolesGuard` to check the `role` from the JWT payload against required roles.
+
+#### [NEW] `apps/api/src/auth/decorators/roles.decorator.ts`
+Implement the `@Roles('ADMIN', 'REP')` decorator.
+
+#### [MODIFY] `apps/api/src/tenant/tenant.middleware.ts`
+Refactor the middleware to extract the `tenantId` from the verified JWT payload rather than trusting an insecure `x-tenant-id` header.
+
+#### [MODIFY] `apps/api/prisma/seed.ts`
+Update the seed script to hash the test user's password using `bcrypt` instead of inserting plain text.
+
+### 4. Next.js Frontend Integration
+#### [NEW] `apps/web/app/login/page.tsx`
+Create a beautiful, modern login page implementing dynamic micro-animations and utilizing the Tailwind CSS layout to hit the `POST /auth/login` endpoint.
+
+## Verification Plan
+1. **API Integration Test:** Create a temporary `@Roles('ADMIN')` protected endpoint. Attempt to hit it without a token (expect 401). 
+2. **Login Verification:** Login via Next.js UI using `admin@logicstics.com`. Assert the JWT is received and stored.
+3. **RBAC Verification:** Hit the protected endpoint with the received JWT (expect 200). Attempt with a `REP` user token (expect 403).

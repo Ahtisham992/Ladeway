@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
+import * as bcrypt from 'bcrypt';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
@@ -22,16 +23,16 @@ async function main() {
   });
 
   // Create test admin user
+  const passwordHash = await bcrypt.hash('password', 12);
   await prisma.user.upsert({
     where: { email: 'admin@logicstics.com' },
-    update: {},
+    update: { passwordHash },
     create: {
       tenantId: tenant.id,
       name: 'Neal Elbaum',
       email: 'admin@logicstics.com',
       role: 'ADMIN',
-      // In production, this must be a bcrypt hash. For seed purposes, a dummy hash is used.
-      passwordHash: '$2b$12$A8l8I3/q/5E/N3G1z4v5Y.H8Hw4e6y8G2G/1r2w3q4e5t6y7u8i9o',
+      passwordHash: passwordHash,
     },
   });
 

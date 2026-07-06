@@ -6,11 +6,16 @@ import { tenantContext } from '../tenant/tenant.context';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  public readonly $system: PrismaClient;
+
   constructor() {
     const pool = new Pool({ connectionString: process.env.DATABASE_URL });
     const adapter = new PrismaPg(pool);
     super({ adapter });
     
+    // Save the raw unextended client for system-level operations (like Auth)
+    this.$system = this;
+
     // Return an extended client that automatically applies RLS
     // by wrapping every query in a transaction that sets the tenant ID.
     // We cast to `any` and then `this` to satisfy NestJS DI which expects a PrismaService instance.

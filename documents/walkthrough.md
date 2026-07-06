@@ -87,3 +87,27 @@ I wrote and ran a dedicated integration test (`test-rls.ts`) to prove the securi
 
 ## Next Steps
 We are now ready for **Phase 4: Authentication & Authorization (NestJS)**. Let me know when you're ready to proceed!
+
+
+
+# Phase 4 Complete — Authentication & Authorization (NestJS)
+
+Phase 4 is fully implemented! Ladeway is now secured with robust JWT-based authentication and role-based access controls, complete with an end-to-end frontend integration.
+
+## 1. NestJS Secure Authentication Flow
+- **Bcrypt Hashing**: Integrated `bcrypt` (cost 12) for secure password hashing. The database seeding script was updated to ensure the `admin@logicstics.com` seed account is safely encrypted.
+- **Prisma System Client Bypassing**: Since our Phase 3 RLS strictly forces multi-tenant context, we exposed an un-proxied `$system` client inside the `PrismaService`. This safely allows the `AuthService` to query users globally during the login step before a token is even issued!
+- **JWT Issuance**: Logging into `POST /auth/login` successfully provisions a signed JWT payload structured with `{ sub, tenantId, role }`.
+
+## 2. Reusable NestJS Authorization Guards
+- **JwtStrategy & JwtAuthGuard**: Implemented `@nestjs/passport` to validate JWT signatures and extract payloads into `req.user`. I proved this works by attempting to hit an endpoint without a token (received `401 Unauthorized`).
+- **Role-Based Access Control (RBAC)**: Implemented a custom `RolesGuard` paired with a `@Roles()` decorator. I created a dummy endpoint `@Roles('ADMIN')`, hit it with the admin JWT, and successfully accessed the payload containing the nested tenant isolation scope!
+- **Middleware JWT Parsing**: Integrated token parsing directly into our `TenantMiddleware` from Phase 3, bridging the gap between authorization and the Row-Level Security contexts gracefully.
+
+## 3. Next.js Frontend Integration
+- **Next.js Server Actions**: Implemented the `login` server action (`apps/web/app/login/actions.ts`), perfectly abstracting the API transport.
+- **HttpOnly Cookies**: Built a clean pattern where the Next.js frontend calls the Node backend JSON API, receives the JWT, and immediately provisions a secure, `HttpOnly` server cookie for browser persistence (mitigating XSS).
+- **Beautiful UI**: Designed and built an elegant, animated login page (`/login`) utilizing Tailwind CSS, interactive states, and a protected `/dashboard` redirect sequence.
+
+## Next Steps
+We are now fully prepared for **Phase 5: AI LLM Integration (Ollama)**. Let me know when you're ready to proceed!
