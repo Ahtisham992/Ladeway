@@ -52,15 +52,16 @@ export class SessionService {
     await this.redis.set(key, JSON.stringify(session), { ex: this.SESSION_TTL_SECONDS });
   }
 
-  async updateStatus(sessionToken: string, status: ConversationStatus): Promise<void> {
+  async updateSession(sessionToken: string, updates: Partial<ConversationSession>): Promise<ConversationSession | null> {
     const session = await this.getSession(sessionToken);
-    if (!session) return;
+    if (!session) return null;
 
-    session.status = status;
+    Object.assign(session, updates);
     session.lastActivityAt = new Date().toISOString();
 
     const key = this.getRedisKey(sessionToken);
     await this.redis.set(key, JSON.stringify(session), { ex: this.SESSION_TTL_SECONDS });
+    return session;
   }
 
   async updateMissingFields(sessionToken: string, missingFields: string[]): Promise<void> {

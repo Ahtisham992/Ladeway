@@ -216,3 +216,102 @@ Phase 8 is fully implemented! We have established the crucial bridging layer tha
 
 ## Next Steps
 With the prompt infrastructure secured, we are ready to move to **Phase 9: Conversation State Machine**. We can now wire up the states we defined in Phase 7 (`GREETING`, `QUALIFYING`, `EXTRACTING`, etc.) into a cohesive engine! Let me know when you're ready to proceed!
+
+
+
+
+# Phase 9 Complete — Conversation State Machine
+
+## What was built
+
+### 1. QualificationEngineService
+[qualification-engine.service.ts](file:///d:/logistics/apps/api/src/qualification/qualification-engine.service.ts)
+
+The core decision engine with a single pure method `getNextAction(session, config, lastUserMessage)` that evaluates state in strict priority order:
+
+1. **Escalation** → `TRIGGER_TRANSFER` (always wins, even if all fields are captured)
+2. **Extraction threshold** → `TRIGGER_EXTRACTION` (every 2 turns when `turnCount >= 2`)
+3. **All fields captured** → `CLOSE_CONVERSATION` (only after extraction has run and confirmed `missingFields` is empty)
+4. **Default** → `CONTINUE_QUALIFYING`
+
+This ordering prevents the edge case where a user provides all information in turn 1 but the system asks an unnecessary follow-up because extraction hasn't run yet.
+
+### 2. Tightened Escalation Detection
+Used the specific phrase list you provided — no false positives on ambiguous phrases like "connect me with pricing" or "representative section on your website". Both edge cases are explicitly tested.
+
+### 3. AbandonmentCronService
+[abandonment-cron.service.ts](file:///d:/logistics/apps/api/src/qualification/abandonment-cron.service.ts)
+
+Runs hourly via `@nestjs/schedule`. Queries PostgreSQL for conversations inactive for 24+ hours that are still in an active state, marks them `ABANDONED`, sets `completedAt`, and cleans up their Redis session. Includes a `TODO` placeholder for Phase 11 partial extraction.
+
+### 4. Unit Test Results — 7/7 Passing
+
+| Test | Result |
+|---|---|
+| Escalation phrase triggers TRANSFER | ✅ |
+| All fields captured triggers CLOSE | ✅ |
+| Turn threshold triggers EXTRACTION | ✅ |
+| Early conversation continues QUALIFYING | ✅ |
+| Escalation takes priority over completion | ✅ |
+| "connect me with pricing" does NOT trigger escalation | ✅ |
+| "representative section on website" does NOT trigger escalation | ✅ |
+
+## Files Created/Modified
+- [qualification.types.ts](file:///d:/logistics/apps/api/src/qualification/types/qualification.types.ts) — `QualificationAction` enum
+- [qualification-engine.service.ts](file:///d:/logistics/apps/api/src/qualification/qualification-engine.service.ts) — core state machine
+- [abandonment-cron.service.ts](file:///d:/logistics/apps/api/src/qualification/abandonment-cron.service.ts) — hourly cron job
+- [qualification.module.ts](file:///d:/logistics/apps/api/src/qualification/qualification.module.ts) — module registration
+- [qualification-engine.service.spec.ts](file:///d:/logistics/apps/api/src/qualification/qualification-engine.service.spec.ts) — unit tests
+- [app.module.ts](file:///d:/logistics/apps/api/src/app.module.ts) — registered `QualificationModule` and `ScheduleModule.forRoot()`
+
+## Next Steps
+Phase 9 is the last prerequisite for **Phase 10: Conversation Start & Message API** — where everything wires together into a working conversation loop with real AI responses streamed via SSE.
+
+
+
+# Phase 10 Complete — Conversation Start & Message API
+
+The backend conversation loop is now fully wired up. The system integrates the config, session state, LLM routing, and qualification engine into two public REST endpoints.
+
+## What was built
+
+### 1. Public REST Endpoints (No JWT)
+[conversation.controller.ts](file:///d:/logistics/apps/api/src/conversation/conversation.controller.ts)
+The controller provides two endpoints that rely solely on `sessionToken` for authorization, deliberately bypassing JWT guards.
+
+**`POST /conversations/start`**
+Takes a `configId`, creates a conversation, creates a Redis session, and returns the static `greeting` directly from the config (no LLM overhead latency).
+
+**`POST /conversations/:id/message`**
+Takes a `sessionToken` and `message`. Initiates a streaming response from the `LLMRouterService`.
+
+### 2. Manual SSE Implementation
+We used `@Res()` and `res.write()` rather than NestJS's `@Sse()` to precisely control headers and event formatting.
+- Added `X-Accel-Buffering: no` header (critical for Railway/Nginx deployments).
+- Formatted every event with the standard `\n\n` delimiter:
+  - `event: token\ndata: {"content": "..."}\n\n`
+  - `event: done\ndata: {"status": "QUALIFYING", "turnCount": 2}\n\n`
+
+### 3. Orchestration & State Wiring
+[conversation.service.ts](file:///d:/logistics/apps/api/src/conversation/conversation.service.ts)
+
+**The RLS Bypass Challenge & Fix:**
+During verification, we encountered `500 Internal Server Error`s ("Unable to start a transaction" & "new row violates row-level security policy"). Because these endpoints bypass JWT authentication, the `tenantContext` was empty. Prisma's `$allOperations` extension responded by injecting a blank `app.current_tenant_id` into the Postgres session, which caused row-level security to block `findUnique` and `create` operations. 
+
+To fix this, we updated both `IndustryConfigService` and `ConversationService` to use the `this.prisma.$system` client for these specific queries. This intentionally bypasses the RLS middleware interceptor. This is perfectly safe for these public endpoints because:
+1. `sessionToken` is a cryptographically random CUID (not guessable).
+2. `conversationId` is a CUID (not guessable).
+3. We never expose other tenants' data — queries are strictly scoped by these inherently tenant-specific tokens.
+
+**Other Wiring Details:**
+- **Context Window Management**: Fetches the message history with `orderBy: { timestamp: 'asc' }` and `take: -20` to guarantee only the last 20 messages are sent to the prompt engine, maintaining strict temporal order.
+- **State Machine Integration**: After the LLM stream completes, `getNextAction()` is evaluated. If terminal (`CLOSED` or `TRANSFERRED`), the session status updates and the DB record sets `completedAt`.
+
+### 4. Consolidated Session Updates
+[session.service.ts](file:///d:/logistics/apps/api/src/session/session.service.ts)
+Added a new `updateSession` method to support bulk updates in a single Redis roundtrip, improving performance during the post-stream state resolution.
+
+## Next Steps
+
+With the API layer functional, the missing link in our state machine is the structured data extraction. 
+We can now proceed to **Phase 11: Structured Data Extractor**, where we'll fulfill the placeholder in the service to parse out structured data points in the background!

@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { ConversationSession } from '../session/types/session.types';
-import { QualificationField } from '@ladeway/types';
 import { IndustryConfig } from '@prisma/client';
 
 export interface LLMMessage {
