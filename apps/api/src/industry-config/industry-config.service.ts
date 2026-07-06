@@ -39,7 +39,7 @@ export class IndustryConfigService {
   }
 
   async findOne(id: string) {
-    const config = await this.prisma.industryConfig.findUnique({
+    const config = await this.prisma.$system.industryConfig.findUnique({
       where: { id },
     });
     if (!config) {

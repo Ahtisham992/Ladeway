@@ -12,7 +12,12 @@ export class ConversationController {
   async startConversation(
     @Body(new ZodValidationPipe(StartConversationSchema)) dto: StartConversationDto
   ) {
-    return this.conversationService.startConversation(dto.configId);
+    try {
+      return await this.conversationService.startConversation(dto.configId);
+    } catch (error) {
+      console.error('START_CONVERSATION_ERROR:', error);
+      throw error;
+    }
   }
 
   @Post(':id/message')

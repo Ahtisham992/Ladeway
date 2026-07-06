@@ -8,6 +8,7 @@ import { QualificationEngineService } from '../qualification/qualification-engin
 import { StartConversationResponse } from './types/conversation.types';
 import { ConversationStatus } from '../session/types/session.types';
 import { QualificationAction } from '../qualification/types/qualification.types';
+import { tenantContext } from '../tenant/tenant.context';
 
 @Injectable()
 export class ConversationService {
@@ -30,9 +31,15 @@ export class ConversationService {
       .filter(f => f.required)
       .map(f => f.key);
 
-    // Create conversation in postgres
-    // Pass tenantId explicitly since public routes don't use the TenantMiddleware RLS
-    const conversation = await this.prisma.conversation.create({
+    // Using $system (bypasses RLS) because this is a PUBLIC endpoint.
+    // Authentication here is via sessionToken (a secure random CUID),
+    // not JWT. The tenantId is sourced from the verified IndustryConfig
+    // record, not from user input. This is safe because:
+    // 1. sessionToken is a cryptographically random CUID — not guessable
+    // 2. conversationId is a CUID — not guessable  
+    // 3. We never expose other tenants' data — queries are scoped by
+    //    conversationId or sessionToken which are inherently tenant-scoped.
+    const conversation = await this.prisma.$system.conversation.create({
       data: {
         tenantId: config.tenantId,
         configId: config.id,
@@ -56,7 +63,7 @@ export class ConversationService {
     });
 
     // Persist the AI greeting
-    await this.prisma.message.create({
+    await this.prisma.$system.message.create({
       data: {
         conversationId: conversation.id,
         sender: 'ai',
@@ -80,7 +87,7 @@ export class ConversationService {
     const config = await this.configService.getActiveConfig(session.configId) as any;
 
     // Persist user message
-    await this.prisma.message.create({
+    await this.prisma.$system.message.create({
       data: {
         conversationId: session.conversationId,
         sender: 'user',
@@ -89,7 +96,7 @@ export class ConversationService {
     });
 
     // Load history (last 20 messages, ascending)
-    const history = await this.prisma.message.findMany({
+    const history = await this.prisma.$system.message.findMany({
       where: { conversationId: session.conversationId },
       orderBy: { timestamp: 'asc' },
       take: -20,
@@ -111,7 +118,7 @@ export class ConversationService {
     }
 
     // Post-stream logic
-    await this.prisma.message.create({
+    await this.prisma.$system.message.create({
       data: {
         conversationId: session.conversationId,
         sender: 'ai',
@@ -139,7 +146,7 @@ export class ConversationService {
 
     // If terminal state, update the DB record too
     if (newStatus === ConversationStatus.CLOSED || newStatus === ConversationStatus.TRANSFERRED) {
-      await this.prisma.conversation.update({
+      await this.prisma.$system.conversation.update({
         where: { id: session.conversationId },
         data: {
           status: newStatus,
