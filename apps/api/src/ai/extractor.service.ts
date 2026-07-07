@@ -67,6 +67,14 @@ export class ExtractorService {
       }
     }
 
+    // Standard contact keys (universal across industries)
+    const contactKeys = ['name', 'email', 'phone'];
+    for (const key of contactKeys) {
+      if (key in parsed) {
+        result[key] = this.parseField(parsed[key]);
+      }
+    }
+
     return result;
   }
 

@@ -156,9 +156,11 @@ export class ConversationService {
             confidence: field.confidence
           });
           
-          const index = newMissingFields.indexOf(key);
-          if (index !== -1) {
-            newMissingFields.splice(index, 1);
+          if (field.confidence >= 0.6) {
+            const index = newMissingFields.indexOf(key);
+            if (index !== -1) {
+              newMissingFields.splice(index, 1);
+            }
           }
         }
       }

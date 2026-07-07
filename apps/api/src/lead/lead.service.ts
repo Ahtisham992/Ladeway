@@ -44,7 +44,12 @@ export class LeadService {
     for await (const chunk of iterator) {
       summary += chunk;
     }
-    summary = summary.trim();
+    
+    // Strip common LLM preambles from summary
+    summary = summary
+      .replace(/^here is.*?:\s*/i, '')
+      .replace(/^summary:\s*/i, '')
+      .trim();
 
     // 3. Contact Info
     const contactInfo = this.extractContactInfo(extractedData);

@@ -60,6 +60,11 @@ If all required fields are collected, gracefully inform the user that you have e
       .map(f => `"${f.key}": ${f.label} — hint: ${f.extractionHint}`)
       .join('\n');
 
+    const contactFieldsMap = `
+"name": Customer Full Name — hint: the person's name
+"email": Customer Email Address — hint: email address
+"phone": Customer Phone Number — hint: phone number`;
+
     const conversationContext = recentMessages
       .map(m => `${m.role.toUpperCase()}: ${m.content}`)
       .join('\n');
@@ -80,6 +85,7 @@ RULES:
 
 FIELDS TO EXTRACT:
 ${missingFieldsMap}
+${contactFieldsMap}
 
 CONVERSATION:
 ${conversationContext}`;
