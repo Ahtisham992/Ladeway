@@ -12,10 +12,11 @@ export interface ChatWidgetProps {
   sessionToken: string
   initialMessages: MessageProps[]
   onComplete?: () => void
+  onSessionExpired?: () => void
   className?: string
 }
 
-export function ChatWidget({ sessionToken, initialMessages, onComplete, className }: ChatWidgetProps) {
+export function ChatWidget({ sessionToken, initialMessages, onComplete, onSessionExpired, className }: ChatWidgetProps) {
   const [messages, setMessages] = useState<MessageProps[]>(initialMessages)
   const [inputValue, setInputValue] = useState("")
   const [isStreaming, setIsStreaming] = useState(false)
@@ -56,8 +57,9 @@ export function ChatWidget({ sessionToken, initialMessages, onComplete, classNam
       })
 
       if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Your session has expired.")
+        if (response.status === 410 || response.status === 401) {
+          onSessionExpired?.()
+          return
         }
         throw new Error("Failed to send message.")
       }

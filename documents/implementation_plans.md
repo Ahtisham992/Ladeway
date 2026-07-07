@@ -1079,3 +1079,76 @@ Confirm variables match the tokens, apply basic `transition-default` of `150ms e
 
 ### Manual Verification
 - We will temporarily mount these components onto the existing frontend landing page (`apps/web/app/page.tsx` or a temporary `/design` route) to verify they render cleanly, interact perfectly (hover states), and contain zero hardcoded colors outside of the token system.
+
+
+# Phase 19 Goal Description
+Phase 19 focuses on building the core customer-facing **Chat Widget Component**. This component will act as the primary interface for the AI, consuming our NestJS SSE streaming endpoint. It needs to be polished, responsive, and robust against streaming artifacts, while adhering to the minimal, avatar-free design specification.
+## User Review Required
+The SSE stream currently requires a `POST` request to send the user's message, but the browser's native `EventSource` API only supports `GET` requests.
+To solve this, there are two common approaches:
+1. **The Native Approach**: We send the message via a standard `fetch` POST request (`POST /conversations/message`). The backend immediately returns a `200 OK` and we open an `EventSource` listening to a `GET /conversations/:id/stream` endpoint. (This requires updating the backend to separate the POST and the Stream).
+2. **The Fetch API Approach (Recommended)**: We keep the backend exactly as it is (`POST /conversations/message` returns a stream) and consume it using the native `fetch` API and a `ReadableStream` decoder (`response.body.getReader()`) in the frontend, manually parsing the `data: ...` chunks.
+> [!IMPORTANT]
+> **Open Question:** I will proceed with **Option 2 (The Fetch API Approach)** as it requires zero backend modifications and handles POST streams perfectly without third-party dependencies. Does this align with your preference?
+## Proposed Changes
+### UI Components (`apps/web/components/chat/`)
+#### [NEW] [ChatWidget.tsx](file:///d:/logistics/apps/web/components/chat/ChatWidget.tsx)
+The primary stateful container. Manages the conversation array (`{ role: 'user' | 'ai', content: string }`), the input state, and the `fetch` stream parsing logic. Includes the input bar and send button.
+#### [NEW] [MessageBubble.tsx](file:///d:/logistics/apps/web/components/chat/MessageBubble.tsx)
+A purely presentational component. Right-aligned with a navy background (`bg-primary text-white`) for the user, and left-aligned with a light grey background (`bg-secondary-50 text-secondary-900`) for the AI. No avatars or emojis.
+#### [NEW] [TypingIndicator.tsx](file:///d:/logistics/apps/web/components/chat/TypingIndicator.tsx)
+A subtle animated ellipsis component rendered inside an AI `MessageBubble` while waiting for the first token to arrive from the server.
+### State & Streaming Logic
+- **Input Blocking:** The `Input` and Send `Button` will be strictly disabled while an AI request is in-flight to prevent double-submissions.
+- **Stream Parsing:** We will read chunks using `TextDecoder`, buffer incomplete lines, split by `\n\n`, and extract the `data:` payload.
+- **Event Handling:**
+  - `event: token` -> Append text to the active AI message bubble.
+  - `event: done` -> Finalize the message, re-enable the input, and log the latest conversation status.
+  - `event: error` -> Render a minimal inline error within the chat without losing history.
+### Responsiveness
+- Ensure `ChatWidget` fits seamlessly on a `375px` viewport (mobile-first).
+- Ensure the send button and input have a minimum touch target height of `44px`.
+## Verification Plan
+### Automated Tests
+- `npm run type-check` to ensure the widget components and streaming logic are type-safe.
+### Manual Verification
+- Render the `ChatWidget` dynamically in our `/design` gallery or the main `page.tsx` temporarily.
+- Point the widget to a mock or active local backend to test the word-by-word streaming animation, typing indicator delays, and mobile layout scaling down to 375px.
+
+
+# Phase 20 Goal Description
+
+Phase 20 integrates the `ChatWidget` we built in Phase 19 into a fully functional conversational flow. The goal is to create the Chat Route (`/chat/[configId]`) that automatically orchestrates the session lifecycle: starting a new conversation upon entry, securely maintaining the `sessionToken` in `sessionStorage` (so refreshing the tab restores the chat), and gracefully managing expiration errors. 
+
+## User Review Required
+
+The specification requires storing `sessionToken` in `sessionStorage` and resuming via `GET /conversations/:id/state`. However, `GET /conversations/state` is currently implemented in the backend as `GET /conversations/state` (fetching the active conversation from the bearer token context), not `/:id/state`. I will query `GET /conversations/state` securely using the stored `sessionToken` header to fetch the active conversation state.
+
+> [!IMPORTANT]
+> **Open Question:** Are you comfortable with putting the state management entirely in a dedicated `useConversationSession` custom hook within the `/chat/[configId]/page.tsx` file to cleanly separate the session logic from the presentation `ChatWidget`?
+
+## Proposed Changes
+
+### Routes (`apps/web/app/chat/[configId]/`)
+#### [NEW] [page.tsx](file:///d:/logistics/apps/web/app/chat/[configId]/page.tsx)
+The primary entry point for a conversation. 
+It extracts `configId` from the URL params.
+If no `sessionToken` exists in `sessionStorage` for this `configId`, it fires `POST /conversations/start`.
+If a token exists, it fires `GET /conversations/state` to resume.
+Passes the active `sessionToken` and `initialMessages` into the `<ChatWidget>`.
+
+### Logic & Session Management
+- **Token Storage**: `sessionStorage.setItem(\`ladeway_session_\${configId}\`, sessionToken)`. This ensures session isolation between tabs, but persists across tab refreshes.
+- **Resumption**: On mount, if a token is found, we query `GET /conversations/state`. We will map the backend `Message` entities into our `ChatWidget` `MessageProps` format.
+- **Expiration handling**: If `GET /conversations/state` returns `401 Unauthorized` (indicating token expiry), the page clears `sessionStorage` and immediately fires `POST /conversations/start` to begin a new session.
+- **Widget Integration**: We will update the `ChatWidget` or wrap it to handle the "Your session has expired. Start a new conversation?" UI if a 401 is triggered mid-conversation.
+
+## Verification Plan
+
+### Automated Tests
+- Run `npm run type-check` across the frontend repository.
+
+### Manual Verification
+1. Navigate to `/chat/<valid-config-id>`. Verify a new conversation is created in the DB and the greeting is immediately displayed.
+2. Hard-refresh the page (F5). Verify the conversation is fully restored and no duplicate conversation is created.
+3. Manually delete the conversation from the DB (simulating an expiry) or wait for expiry, then refresh. Verify the application gracefully resets and starts a fresh conversation seamlessly.

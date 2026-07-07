@@ -598,3 +598,18 @@ Moving directly to **Phase 19 (Chat Widget Component)** as requested next.
 5. **Auto-Scroll & Session State**: Handled scrolling seamlessly using a `useRef` sentinel div pointing to the bottom of the message array. Handled component locks around streaming events (`done` to re-enable, `error` for inline alerts).
 
 **Verification**: `npm run type-check` compiles perfectly. The SSE parser cleanly matches all requirements.
+
+---
+
+## Phase 20: Conversation Start Flow & Session Management
+
+**Goal**: Orchestrate the conversational session lifecycle logic, allowing conversations to be initiated cleanly, persisted across tabs using `sessionStorage`, and seamlessly restarted if expired.
+
+**Implementation Highlights**:
+1. **Public State Endpoint**: Expanded the backend `ConversationController` with a public `GET /state?sessionToken=xxx` endpoint that uses `$system.message.findMany` to bypass JWT constraints and securely retrieve the message history via an active `sessionToken`.
+2. **Session Hook (`useConversationSession`)**: Extracted all data lifecycle logic into a cleanly separated custom hook. Handled React strict mode race conditions via a `useRef` guard to prevent double `POST /start` requests, and accurately mapped backend `Message` entities into `MessageProps` format for the UI.
+3. **Storage Strategy**: Cached the `sessionToken` inside `sessionStorage` utilizing a `ladeway_session_${configId}` key format. This prevents collisions across different industry demos while keeping the session persistent across hard refreshes.
+4. **Expiration Handlers (401/410)**: Upgraded `ChatWidget` to invoke `onSessionExpired` if the active fetch streaming API replies with `410 Gone` or `401 Unauthorized`. The top level `ChatPage` correctly injects the `reset()` function to wipe `sessionStorage` and launch a clean conversation if this occurs mid-stream.
+5. **Chat Route**: Completed `apps/web/app/chat/[configId]/page.tsx` providing a robust mobile-first layout containing the virtual assistant header wrapper over the functional `ChatWidget`.
+
+**Verification**: `npm run type-check` runs with 0 errors across the frontend repo. Component logic handles both empty start and active resume scenarios successfully.

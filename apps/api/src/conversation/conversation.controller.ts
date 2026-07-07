@@ -1,12 +1,18 @@
-import { Controller, Post, Body, Res, Param } from '@nestjs/common';
+import { Controller, Post, Body, Res, Param, Get, Query, NotFoundException } from '@nestjs/common';
 import { Response } from 'express';
 import { ConversationService } from './conversation.service';
+import { SessionService } from '../session/session.service';
+import { PrismaService } from '../database/prisma.service';
 import { StartConversationDto, SendMessageDto, StartConversationSchema, SendMessageSchema } from './types/conversation.types';
 import { ZodValidationPipe } from '../industry-config/zod.pipe';
 
 @Controller('conversations')
 export class ConversationController {
-  constructor(private readonly conversationService: ConversationService) {}
+  constructor(
+    private readonly conversationService: ConversationService,
+    private readonly sessionService: SessionService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Post('start')
   async startConversation(
@@ -47,6 +53,30 @@ export class ConversationController {
       res.write(`event: error\ndata: ${JSON.stringify({ message: error.message })}\n\n`);
     } finally {
       res.end();
+    }
+  }
+
+  @Get('state')
+  async getState(@Query('sessionToken') sessionToken: string) {
+    const session = await this.sessionService.getSession(sessionToken)
+    if (!session) throw new NotFoundException('Session expired')
+    
+    const messages = await this.prisma.$system.message.findMany({
+      where: { conversationId: session.conversationId },
+      orderBy: { timestamp: 'asc' }
+    })
+    
+    return {
+      conversationId: session.conversationId,
+      status: session.status,
+      capturedFields: session.capturedFields,
+      missingFields: session.missingFields,
+      messages: messages.map(m => ({
+        id: m.id,
+        sender: m.sender,
+        content: m.content,
+        timestamp: m.timestamp
+      }))
     }
   }
 }
