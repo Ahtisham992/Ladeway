@@ -874,3 +874,50 @@ Prevent the conversation loop from breaking when Groq throws a 5xx error or rate
 - Create `test-recovery.ts` to simulate a Redis wipe mid-conversation, verify `SessionService` rebuilds state from Postgres, and confirm the conversation successfully completes.
 - Create `test-abandonment.ts` to inject an old conversation with partial data into PostgreSQL, trigger the Cron, and assert that a Lead with status `ABANDONED` is created.
 - Create `test-ai-error.ts` to force an AI exception and verify that the API returns an `event: error` while the Database status remains `QUALIFYING`.
+
+
+
+# Phase 15 — Escalation & Human Handoff
+
+This phase improves our system's ability to seamlessly hand off conversations to human representatives when the user requests it, or when the AI detects frustration.
+
+## Proposed Changes
+
+We will implement a robust intent detection mechanism and ensure that escalated conversations successfully generate `TRANSFERRED` leads containing all context gathered up to the point of escalation.
+
+### 1. LLM-Based Intent Classifier (`QualificationEngineService`)
+Currently, `QualificationEngineService` relies on a strict list of `ESCALATION_KEYWORDS`. We will improve this by introducing a fallback LLM intent classifier for ambiguous phrasing. 
+- If a message matches a keyword, we immediately escalate.
+- If not, we will pass the message through a fast `LLMRouterService` classification prompt (e.g. `llama-3.1-8b-instant`) to determine if the user intends to speak to a human, or if they are just asking a normal question.
+- **Note:** To maintain low latency, this LLM check will only occur if the user's message is short (under ~100 chars) or contains soft keywords like "someone", "manager", "representative", etc.
+
+### 2. Pre-Stream Transfer Interception (`ConversationService`)
+Currently, `QualificationEngine` evaluates the next action *after* the conversational LLM generates its response. 
+- We will refactor `ConversationService.sendMessage` to evaluate `getNextAction` **before** invoking the conversational LLM.
+- If `TRIGGER_TRANSFER` is returned, we will bypass the conversational AI entirely. 
+- Instead, we will manually stream a professional, warm closing message directly to the SSE stream (e.g., *"I've noted your request to speak with a team member. I'm transferring your conversation now, and someone will be in touch shortly."*).
+
+### 3. Partial Extraction & Lead Generation (`ConversationService`)
+When `TRIGGER_TRANSFER` is executed:
+- The conversation status will be immediately transitioned to `TRANSFERRED`.
+- The `ExtractorService` will run asynchronously (similar to Phase 14 Abandonment).
+- The `LeadService` will generate a Lead with `status: TRANSFERRED` and tag the summary with `[ESCALATED]`, ensuring sales reps know to prioritize this contact.
+
+### 4. Comprehensive Testing (`test-escalation.ts`)
+We will create a new E2E test script that simulates:
+- A user typing ambiguous phrasing ("I'd prefer to talk to someone" or "human please").
+- Verifies that the LLM classifier catches it.
+- Verifies that the warm transfer message is streamed back.
+- Verifies that a `TRANSFERRED` lead is generated containing the partial data captured prior to escalation.
+
+## Verification Plan
+
+### Automated Tests
+- Run `npx ts-node test/test-escalation.ts` to prove that 10 different escalation phrasings all correctly trigger the transfer flow and generate a Lead record.
+- Run existing E2E tests (`test-e2e-all.ts`) to ensure the new intent classifier does not introduce false positives that prematurely transfer standard conversations.
+
+## Open Questions
+
+> [!WARNING]  
+> **LLM Classifier Latency**  
+> Running an intent classification prompt before the conversational prompt adds a blocking network call to the critical path. Are you comfortable with an extra ~300ms latency for messages that trigger the classifier, or should we strictly stick to keyword-based detection with a vastly expanded dictionary?

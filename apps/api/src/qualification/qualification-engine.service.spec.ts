@@ -76,6 +76,30 @@ describe('QualificationEngineService', () => {
     expect(action).toBe(QualificationAction.CONTINUE_QUALIFYING);
   });
 
+  it('should NOT trigger transfer for "connect me with pricing information"', () => {
+    const session = buildSession({ turnCount: 1 });
+    const action = engine.getNextAction(session, mockConfig, 'can you connect me with pricing information');
+    expect(action).toBe(QualificationAction.CONTINUE_QUALIFYING);
+  });
+
+  it('should NOT trigger transfer for "I want to speak more about the timeline"', () => {
+    const session = buildSession({ turnCount: 1 });
+    const action = engine.getNextAction(session, mockConfig, 'I want to speak more about the timeline');
+    expect(action).toBe(QualificationAction.CONTINUE_QUALIFYING);
+  });
+
+  it('should NOT trigger transfer for "is there a manager fee for international moves"', () => {
+    const session = buildSession({ turnCount: 1 });
+    const action = engine.getNextAction(session, mockConfig, 'is there a manager fee for international moves');
+    expect(action).toBe(QualificationAction.CONTINUE_QUALIFYING);
+  });
+
+  it('should NOT trigger transfer for "someone told me you handle commercial moves"', () => {
+    const session = buildSession({ turnCount: 1 });
+    const action = engine.getNextAction(session, mockConfig, 'someone told me you handle commercial moves');
+    expect(action).toBe(QualificationAction.CONTINUE_QUALIFYING);
+  });
+
   it('should NOT trigger escalation for "representative section on your website"', () => {
     const session = buildSession({ turnCount: 1 });
     const action = engine.getNextAction(session, mockConfig, 'do you have a customer representative section on your website');

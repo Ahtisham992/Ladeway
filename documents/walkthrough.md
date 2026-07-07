@@ -514,3 +514,20 @@ Phase 14 ensures that Ladeway gracefully handles system failures, AI downtime, a
 - **Issue fixed:** An error during the LLM streaming call could leave the conversation broken or cause server crashes.
 - **Solution:** Wrapped the LLM invocation in a try/catch block. If an AI exception occurs, it yields an `event: error` over the SSE stream, notifying the client. Crucially, the system leaves the conversation state untouched (`QUALIFYING`) so the user can simply retry their message.
 - **Result:** Graceful failure on AI service unavailability. Verified with `test-ai-error.ts`.
+
+# Phase 15: Escalation & Human Handoff
+
+Phase 15 introduces the ability for users to gracefully escalate the conversation to a human representative, seamlessly transitioning the state and preserving all captured information.
+
+### 1. Robust Intent Detection
+- **Implementation:** Expanded the `ESCALATION_KEYWORDS` array in `QualificationEngineService` to include over 20 distinct phrases covering explicit requests (e.g., "speak to a human"), transfer requests ("transfer me"), representative requests ("speak to a manager"), frustration signals ("this is not helpful"), and soft but unambiguous requests ("id rather talk to someone").
+- **Verification:** Unit tests successfully verify that false positives (like "connect me with pricing information") do not trigger escalation, while all true escalation requests correctly trigger `TRIGGER_TRANSFER`.
+
+### 2. Pre-Stream Transfer Interception
+- **Implementation:** Refactored `ConversationService.sendMessage` to evaluate the conversation's `nextAction` **BEFORE** invoking the LLM streaming endpoint. 
+- **User Experience:** If a user requests a human, the system instantly bypasses the LLM and streams back a warm, professional closing message ("I've noted your request to speak with a team member...") without waiting for an AI hallucinated response.
+
+### 3. Partial Extraction & Lead Generation
+- **Implementation:** Upon intercepting a transfer request, the conversation transitions immediately to `TRANSFERRED`. The `ExtractorService` then runs in the background to glean any data provided prior to escalation.
+- **Lead Hand-off:** A Lead record is created asynchronously with a dedicated `status` of `TRANSFERRED`, allowing sales representatives to easily identify and prioritize escalated users in the dashboard.
+- **Verification:** `test-escalation.ts` successfully ran an end-to-end flow demonstrating immediate transfer and lead creation from a frustrated user.
