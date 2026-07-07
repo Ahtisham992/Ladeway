@@ -69,6 +69,8 @@ model Conversation {
 
   @@index([tenantId])
   @@index([configId])
+  @@index([tenantId, status])
+  @@index([tenantId, startedAt])
 }
 
 model Message {
@@ -114,6 +116,8 @@ model Lead {
   @@index([tenantId])
   @@index([tier])
   @@index([status])
+  @@index([tenantId, tier])
+  @@index([tenantId, createdAt])
 }
 
 model LeadAssignment {

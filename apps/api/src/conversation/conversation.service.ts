@@ -30,6 +30,10 @@ export class ConversationService {
   async startConversation(configId: string): Promise<StartConversationResponse> {
     const config = await this.configService.getActiveConfig(configId) as any;
     
+    if (!config || !config.isActive) {
+      throw new NotFoundException('Configuration not found or inactive');
+    }
+    
     const fieldsJson = config.fieldsJson as any[];
     const missingFields = fieldsJson
       .filter(f => f.required)
@@ -64,6 +68,10 @@ export class ConversationService {
       missingFields,
       status: ConversationStatus.QUALIFYING,
       turnCount: 1,
+      configSnapshot: {
+        fieldsJson: config.fieldsJson,
+        scoringRulesJson: config.scoringRulesJson
+      }
     });
 
     // Persist the AI greeting
@@ -93,6 +101,11 @@ export class ConversationService {
     }
 
     const config = await this.configService.getActiveConfig(session.configId) as any;
+    
+    if (session.configSnapshot) {
+      config.fieldsJson = session.configSnapshot.fieldsJson;
+      config.scoringRulesJson = session.configSnapshot.scoringRulesJson;
+    }
 
     // Persist user message
     await this.prisma.$system.message.create({
@@ -115,19 +128,27 @@ export class ConversationService {
       content: m.content,
     }));
 
-    const prompt = this.promptService.assembleConversationPrompt(config, session, messages);
-
+    let nextAction = this.qualificationEngine.getNextAction(session, config, userMessage);
     let fullResponse = '';
     
-    try {
-      // Stream response
-      for await (const token of this.llmRouter.stream(prompt)) {
-        fullResponse += token;
-        yield token;
+    if (nextAction === QualificationAction.TRIGGER_TRANSFER) {
+      fullResponse = "I've noted your request to speak with a team member. I'm transferring your conversation now, and someone will be in touch shortly.";
+      const words = fullResponse.split(' ');
+      for (const word of words) {
+        yield word + (word === words[words.length - 1] ? '' : ' ');
+        await new Promise(r => setTimeout(r, 20));
       }
-    } catch (error: any) {
-      this.logger.error(`AI Streaming Error: ${error.message}`, error.stack);
-      throw new Error('AI service temporarily unavailable. Please try again.');
+    } else {
+      const prompt = this.promptService.assembleConversationPrompt(config, session, messages);
+      try {
+        for await (const token of this.llmRouter.stream(prompt)) {
+          fullResponse += token;
+          yield token;
+        }
+      } catch (error: any) {
+        this.logger.error(`AI Streaming Error: ${error.message}`, error.stack);
+        throw new Error('AI service temporarily unavailable. Please try again.');
+      }
     }
 
     // Post-stream logic
@@ -141,13 +162,12 @@ export class ConversationService {
     
     messages.push({ role: 'assistant', content: fullResponse });
 
-    // Determine next state
-    let nextAction = this.qualificationEngine.getNextAction(session, config, userMessage);
     let newStatus = session.status;
     let currentSession = session;
 
-    if (nextAction === QualificationAction.TRIGGER_EXTRACTION) {
-      this.logger.log(`Triggering extraction for session ${sessionToken}`);
+    // We run extraction on TRIGGER_EXTRACTION and TRIGGER_TRANSFER
+    if (nextAction === QualificationAction.TRIGGER_EXTRACTION || nextAction === QualificationAction.TRIGGER_TRANSFER) {
+      this.logger.log(`Triggering extraction for session ${sessionToken} with action ${nextAction}`);
       
       const extractionResult = await this.extractor.extract(config, currentSession, messages);
       
@@ -191,7 +211,10 @@ export class ConversationService {
           currentSession = updatedSession;
         }
 
-        nextAction = this.qualificationEngine.getNextAction(currentSession, config, userMessage);
+        // Only re-evaluate if it was TRIGGER_EXTRACTION, as we might have completed all fields
+        if (nextAction === QualificationAction.TRIGGER_EXTRACTION) {
+          nextAction = this.qualificationEngine.getNextAction(currentSession, config, userMessage);
+        }
       }
     }
 

@@ -51,9 +51,12 @@ export class LeadService {
       .replace(/^summary:\s*/i, '')
       .trim();
 
-    const leadStatus = conversation.status === 'ABANDONED' ? 'ABANDONED' : 'NEW';
-    if (leadStatus === 'ABANDONED') {
+    let leadStatus = 'NEW';
+    if (conversation.status === 'ABANDONED') {
+      leadStatus = 'ABANDONED';
       summary = `[PARTIAL] ${summary}`;
+    } else if (conversation.status === 'TRANSFERRED') {
+      leadStatus = 'TRANSFERRED';
     }
 
     // 3. Contact Info

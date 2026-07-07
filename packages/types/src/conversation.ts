@@ -44,9 +44,16 @@ export interface ConversationSession {
   status: ConversationStatus;
   /** Fields already captured: { fieldKey: capturedValue } */
   capturedFields: Record<string, string>;
+  missingFields: string[];
+  turnCount: number;
   /** Timestamps for tracking activity */
   startedAt: string;
   lastActivityAt: string;
+  /** Snapshot of config at start time to immunize session against config updates */
+  configSnapshot?: {
+    fieldsJson: any;
+    scoringRulesJson: any;
+  };
 }
 
 /** Actions the qualification engine can return */

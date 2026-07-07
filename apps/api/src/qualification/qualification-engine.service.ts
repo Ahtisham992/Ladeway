@@ -11,18 +11,26 @@ export class QualificationEngineService {
    * "representative" alone are excluded to avoid false positives.
    */
   private readonly ESCALATION_KEYWORDS = [
-    'speak to a human',
-    'talk to a person',
-    'real person',
-    'human agent',
-    'speak to someone real',
-    'talk to a real person',
-    'transfer me to',
-    'speak to a representative',
-    'speak to a manager',
-    'speak to a supervisor',
-    'i want a human',
-    'i need a human',
+    // Explicit human requests
+    'speak to a human', 'talk to a person', 'real person',
+    'human agent', 'speak to someone real', 'talk to a real person',
+    'i want a human', 'i need a human', 'get me a human',
+    // Transfer requests  
+    'transfer me', 'transfer me to', 'connect me to a person',
+    // Representative requests
+    'speak to a representative', 'talk to a representative',
+    'speak to a manager', 'talk to a manager',
+    'speak to a supervisor', 'talk to a supervisor',
+    'speak to an agent', 'talk to an agent',
+    // Frustration signals
+    'this is not helpful', 'you are not helping',
+    'i want to talk to a real person', 'stop', 'quit',
+    'just let me speak to someone',
+    // Soft but unambiguous
+    'i prefer to speak with someone',
+    'id rather talk to someone',
+    'can i speak with a person',
+    'is there a person i can talk to',
   ];
 
   /**

@@ -514,3 +514,117 @@ Phase 14 ensures that Ladeway gracefully handles system failures, AI downtime, a
 - **Issue fixed:** An error during the LLM streaming call could leave the conversation broken or cause server crashes.
 - **Solution:** Wrapped the LLM invocation in a try/catch block. If an AI exception occurs, it yields an `event: error` over the SSE stream, notifying the client. Crucially, the system leaves the conversation state untouched (`QUALIFYING`) so the user can simply retry their message.
 - **Result:** Graceful failure on AI service unavailability. Verified with `test-ai-error.ts`.
+
+# Phase 15: Escalation & Human Handoff
+
+Phase 15 introduces the ability for users to gracefully escalate the conversation to a human representative, seamlessly transitioning the state and preserving all captured information.
+
+### 1. Robust Intent Detection
+- **Implementation:** Expanded the `ESCALATION_KEYWORDS` array in `QualificationEngineService` to include over 20 distinct phrases covering explicit requests (e.g., "speak to a human"), transfer requests ("transfer me"), representative requests ("speak to a manager"), frustration signals ("this is not helpful"), and soft but unambiguous requests ("id rather talk to someone").
+- **Verification:** Unit tests successfully verify that false positives (like "connect me with pricing information") do not trigger escalation, while all true escalation requests correctly trigger `TRIGGER_TRANSFER`.
+
+### 2. Pre-Stream Transfer Interception
+- **Implementation:** Refactored `ConversationService.sendMessage` to evaluate the conversation's `nextAction` **BEFORE** invoking the LLM streaming endpoint. 
+- **User Experience:** If a user requests a human, the system instantly bypasses the LLM and streams back a warm, professional closing message ("I've noted your request to speak with a team member...") without waiting for an AI hallucinated response.
+
+### 3. Partial Extraction & Lead Generation
+- **Implementation:** Upon intercepting a transfer request, the conversation transitions immediately to `TRANSFERRED`. The `ExtractorService` then runs in the background to glean any data provided prior to escalation.
+- **Lead Hand-off:** A Lead record is created asynchronously with a dedicated `status` of `TRANSFERRED`, allowing sales representatives to easily identify and prioritize escalated users in the dashboard.
+- **Verification:** `test-escalation.ts` successfully ran an end-to-end flow demonstrating immediate transfer and lead creation from a frustrated user.
+
+# Phase 16: Config CRUD Hardening
+
+Phase 16 hardened the IndustryConfig APIs to ensure they are production-ready for the admin dashboard. We introduced versioning and snapshotting to ensure complete historical integrity of past conversations.
+
+### 1. Config Versioning & Updates (Immutability)
+- **Implementation:** Refactored `PUT /configs/:id` so that updating structural elements (`fieldsJson` or `scoringRulesJson`) no longer mutates the existing row. Instead, the current config is deactivated (`isActive: false`) and a new config row is created, effectively acting as a version bump.
+- **In-place Updates:** Superficial changes (like `personaName` or `greeting`) still update in place to prevent unnecessary database bloat.
+- **Return Value:** The API now returns `{ id, versioned: boolean }` so clients know if the ID changed.
+
+### 2. Session Config Snapshotting
+- **Implementation:** `ConversationService.startConversation` now takes a snapshot of the active `fieldsJson` and `scoringRulesJson` and stores it directly inside the Redis `ConversationSession`.
+- **Result:** If an administrator bumps the version of a config while a user is mid-conversation, the user's active session is completely immunized. The extraction engine and LLM prompts read strictly from the frozen session snapshot, guaranteeing consistency.
+
+### 3. Deletion Guards & Deactivation
+- **Implementation:** Added a rigid guard to `DELETE /configs/:id` that checks for any linked conversations. If found, it returns a `409 Conflict`, enforcing the rule that used configs can only be deactivated, never deleted.
+- **Status Toggle:** Added `PATCH /configs/:id/status` to easily deactivate a config without a full update payload. `POST /conversations/start` correctly rejects deactivated configs with a `404`.
+
+### 4. Zero-Record Preview Endpoint
+- **Implementation:** Added `GET /configs/:id/preview?message=...` to allow administrators to simulate a one-turn conversation with the configured persona.
+- **Verification:** It successfully returns the generated LLM response dynamically based on the requested tone/persona without creating *any* junk records in the PostgreSQL database. Verified via `test-config-crud.ts`.
+
+
+# Phase 17: Analytics Data Layer
+
+**Goal**: Provide the core data APIs for the frontend analytics dashboards, aggregating conversation and lead data efficiently.
+
+**Implementation Highlights**:
+1. **Raw SQL Optimization**: We opted to bypass Prisma's middleware transaction overhead using `Prisma.sql` and `$queryRaw` to concurrently calculate aggregated summary data (Conversations by status, Average turn count, Leads by tier, Industry funnel metrics).
+2. **Time-series endpoints**: Added time-series grouping endpoints (`/analytics/conversations`, `/analytics/leads`) utilizing PostgreSQL's `DATE_TRUNC` function for charting.
+3. **RBAC Guarding**: Strictly secured all three new endpoints (`/analytics/summary`, `/analytics/conversations`, `/analytics/leads`) with `@Roles('ADMIN')`. The REP role correctly receives a `403 Forbidden`.
+4. **Performance Indexes**: Added targeted composite indexes (`tenantId, status`, `tenantId, startedAt`, `tenantId, tier`, `tenantId, createdAt`) directly into the `schema.prisma` to keep aggregation fast at scale.
+
+**Verification**: E2E test scripts created 20 dummy conversations, 100 messages, and 15 leads, executing raw queries correctly via `Promise.all` and parsing counts, successfully matching funnel logic securely. This wraps up all 17 backend phases.
+
+---
+
+## Phase 18: Design System & Shared UI Components
+
+**Goal**: Establish the foundational design tokens, typography, and base component library for the Next.js frontend to ensure every screen matches the premium design specification exactly.
+
+**Implementation Highlights**:
+1. **Utility & Dependencies**: Configured `clsx` and `tailwind-merge` within a central `cn()` utility (`lib/utils.ts`). Installed `lucide-react` for premium, consistent scalable vector icons (resolved React 18 type mismatches by updating `@types/react`).
+2. **Component Library Built**: Developed all 13 core components (`Button`, `Input`, `Textarea`, `Select`, `Badge`, `Card`, `Modal`, `Spinner`, `Skeleton`, `Table`) in `components/ui/`.
+3. **Exact Token Mapping**: 
+   - Overhauled `Badge.tsx` to explicitly handle all 6 possible backend states with their designated styles (`HOT`, `WARM`, `COLD`, `TRANSFERRED`, `ABANDONED`, `DEFAULT`).
+   - Extended `tailwind.config.ts` to include `primary-light` and `surface` tokens.
+4. **Developer Reference Gallery**: Created `apps/web/app/design/page.tsx` as a permanent design system component gallery. It displays side-by-side variants of all components, demonstrating focus, hover, disabled states, and the `150ms ease` animation spec.
+
+**Verification**: Ran `npm run type-check` strictly verifying the entire React TS codebase cleanly compiles.
+
+Moving directly to **Phase 19 (Chat Widget Component)** as requested next.
+
+---
+
+## Phase 19: Chat Widget Component
+
+**Goal**: Build a production-quality, professionally designed customer-facing chat interface that consumes the NestJS SSE streaming endpoint reliably.
+
+**Implementation Highlights**:
+1. **Public Endpoint for Configs**: Added `GET /industry-configs/public` in the NestJS backend to allow the frontend to fetch available config records seamlessly without needing an admin JWT.
+2. **Widget Layout & Components**: Developed `ChatWidget.tsx`, `MessageBubble.tsx`, and `TypingIndicator.tsx`. Clean, minimal layout respecting the specification (no avatars/emojis, strictly utilizing `primary` navy for users and `secondary-50` for AI). Mobile responsiveness guaranteed with a 375px min-width wrapper and 44px minimum touch targets on the inputs/buttons.
+3. **SSE Streaming (Fetch API)**: Implemented robust stream consumption via `response.body.getReader()`. Built a line buffer paired with `TextDecoder({ stream: true })` to prevent JSON parsing crashes on chunk boundaries.
+4. **Seamless Typing Indicator**: A subtle, bouncing 3-dot animation is displayed inside a placeholder `MessageBubble` immediately when an AI response starts in-flight, which gracefully is swapped with actual markdown tokens as soon as `event: token` pushes chunks, removing any visual flash.
+5. **Auto-Scroll & Session State**: Handled scrolling seamlessly using a `useRef` sentinel div pointing to the bottom of the message array. Handled component locks around streaming events (`done` to re-enable, `error` for inline alerts).
+
+**Verification**: `npm run type-check` compiles perfectly. The SSE parser cleanly matches all requirements.
+
+---
+
+## Phase 20: Conversation Start Flow & Session Management
+
+**Goal**: Orchestrate the conversational session lifecycle logic, allowing conversations to be initiated cleanly, persisted across tabs using `sessionStorage`, and seamlessly restarted if expired.
+
+**Implementation Highlights**:
+1. **Public State Endpoint**: Expanded the backend `ConversationController` with a public `GET /state?sessionToken=xxx` endpoint that uses `$system.message.findMany` to bypass JWT constraints and securely retrieve the message history via an active `sessionToken`.
+2. **Session Hook (`useConversationSession`)**: Extracted all data lifecycle logic into a cleanly separated custom hook. Handled React strict mode race conditions via a `useRef` guard to prevent double `POST /start` requests, and accurately mapped backend `Message` entities into `MessageProps` format for the UI.
+3. **Storage Strategy**: Cached the `sessionToken` inside `sessionStorage` utilizing a `ladeway_session_${configId}` key format. This prevents collisions across different industry demos while keeping the session persistent across hard refreshes.
+4. **Expiration Handlers (401/410)**: Upgraded `ChatWidget` to invoke `onSessionExpired` if the active fetch streaming API replies with `410 Gone` or `401 Unauthorized`. The top level `ChatPage` correctly injects the `reset()` function to wipe `sessionStorage` and launch a clean conversation if this occurs mid-stream.
+5. **Chat Route**: Completed `apps/web/app/chat/[configId]/page.tsx` providing a robust mobile-first layout containing the virtual assistant header wrapper over the functional `ChatWidget`.
+
+**Verification**: `npm run type-check` runs with 0 errors across the frontend repo. Component logic handles both empty start and active resume scenarios successfully.
+
+---
+
+## Phase 21: Multi-Industry Demo Landing Page
+
+**Goal**: Construct a polished, high-converting root landing page that dynamically showcases all available industry demonstrations using a robust server-side architecture.
+
+**Implementation Highlights**:
+1. **Server Component Architecture**: Rebuilt `apps/web/app/page.tsx` as an asynchronous Server Component. We securely query `process.env.API_URL` without exposing it to the client bundle, enforcing `{ cache: 'no-store' }` so new industry configs appear instantly upon creation.
+2. **Dynamic Grid Scaling**: Migrated from a strict two-column layout to a fully dynamic responsive grid (`grid-cols-1 md:grid-cols-2 lg:grid-cols-3`). This scales automatically for Logistics, Real Estate, Legal Services, and any future configs, visually reinforcing the data-driven engine.
+3. **Design System Integration**: Leveraged the `Card`, `CardHeader`, `CardTitle`, and `Button` components from Phase 18. Each card clearly routes the evaluator directly into the associated `/chat/[configId]` experience.
+4. **Resilient Fallback UX**: Implemented a graceful error boundary specifically for demo environments (like cold starts on Railway). If the backend is unreachable, it displays a non-blocking `AlertCircle` warning and populates the grid with mock `fallbackConfigs` to preserve the visual impact rather than crashing to a white screen.
+5. **Core Value Proposition**: Injected the requested messaging immediately below the grid: *"Same AI engine. Different industries. Configured entirely through data — no code changes."*
+
+**Verification**: Ran `npm run type-check` cleanly. The page securely consumes environment variables and constructs proper Next.js routing patterns.
