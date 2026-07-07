@@ -26,7 +26,7 @@ export class AbandonmentCronService {
   async handleAbandonedConversations(): Promise<void> {
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-    const staleConversations = await this.prisma.conversation.findMany({
+    const staleConversations = await this.prisma.$system.conversation.findMany({
       where: {
         startedAt: { lt: cutoff },
         status: {
@@ -54,7 +54,7 @@ export class AbandonmentCronService {
 
     for (const conv of staleConversations) {
       // Update PostgreSQL status
-      await this.prisma.conversation.update({
+      await this.prisma.$system.conversation.update({
         where: { id: conv.id },
         data: {
           status: ConversationStatus.ABANDONED,
@@ -62,11 +62,8 @@ export class AbandonmentCronService {
         },
       });
 
-      // Clean up Redis session
-      await this.sessionService.deleteSession(conv.sessionToken);
-
       // Trigger partial extraction if ≥50% of fields were captured
-      const config = await this.prisma.industryConfig.findUnique({ where: { id: conv.configId } });
+      const config = await this.prisma.$system.industryConfig.findUnique({ where: { id: conv.configId } });
       const session = await this.sessionService.getSession(conv.sessionToken);
       
       if (config && session) {
@@ -77,7 +74,7 @@ export class AbandonmentCronService {
         if (totalFields > 0 && (capturedFieldsCount / totalFields) >= 0.5) {
           this.logger.log(`Triggering partial extraction for ABANDONED conversation ${conv.id}`);
           
-          const history = await this.prisma.message.findMany({
+          const history = await this.prisma.$system.message.findMany({
             where: { conversationId: conv.id },
             orderBy: { timestamp: 'asc' },
           });
@@ -102,7 +99,7 @@ export class AbandonmentCronService {
           }
 
           if (newExtractedData.length > 0) {
-            await this.prisma.extractedData.createMany({ data: newExtractedData });
+            await this.prisma.$system.extractedData.createMany({ data: newExtractedData });
           }
           
           try {
@@ -112,6 +109,9 @@ export class AbandonmentCronService {
           }
         }
       }
+
+      // Clean up Redis session AFTER extraction is done
+      await this.sessionService.deleteSession(conv.sessionToken);
 
       this.logger.log(`Marked conversation ${conv.id} as ABANDONED`);
     }

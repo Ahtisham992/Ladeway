@@ -834,3 +834,43 @@ The objective of Phase 13 is to concretely prove that the AI qualification pipel
 - Run `npx ts-node prisma/seed.ts` to inject the new Legal config.
 - Run `npx ts-node test-e2e-all.ts` to simulate conversations across Logistics, Real Estate, and Legal.
 - Verify that each run produces a Status: `CLOSED` conversation, correct structured `ExtractedData`, and a successfully generated `Lead` record.
+
+
+# Phase 14: Conversation Resilience & State Recovery
+
+Phase 14 ensures that Ladeway can handle system failures, AI downtime, and user abandonment gracefully without losing critical data.
+
+## Proposed Changes
+
+### 1. Redis TTL Expiry Recovery
+When a session expires in Redis (after 24 hours or a server restart), the conversation can still be recovered.
+- **Modify `SessionService.getSession(sessionToken)`**: 
+  - If Redis returns `null`, query PostgreSQL for the `Conversation` by `sessionToken`.
+  - If the conversation is active (`GREETING`, `QUALIFYING`), reconstruct the `ConversationSession` object.
+  - Re-derive `capturedFields` by passing the entire conversation message history to `ExtractorService.extract` in a "recovery mode".
+  - Re-save the reconstructed session to Redis and return it.
+
+### 2. Conversation Resume functionality
+- Ensure `ConversationController.sendMessage` flawlessly accepts a valid `sessionToken` at any time.
+- (Implicitly supported by the TTL Recovery fix above) If the user returns after 2 days and sends a message with their old token, the system will reconstruct their session and immediately respond with the next appropriate question based on the recovered state.
+
+### 3. Partial Lead Creation on Abandonment
+When a user stops responding, the system cleans up the session. We must ensure valuable partial data is saved as a Lead.
+- **Modify `AbandonmentCronService.handleAbandonedConversations()`**:
+  - Reorder logic: Currently, it deletes the Redis session *before* trying to extract partial data, causing extraction to fail.
+  - Delay Redis session deletion until *after* extraction.
+  - Trigger `ExtractorService.extract` for the abandoned conversation.
+  - If ≥ 50% of the required fields are captured, create a `Lead` in PostgreSQL but explicitly set `status = "ABANDONED"` and append `"[PARTIAL]"` to the generated summary to alert agents.
+
+### 4. AI Unavailable Mid-Conversation Error Handling
+Prevent the conversation loop from breaking when Groq throws a 5xx error or rate limit.
+- **Modify `ConversationService.sendMessage()` and `ConversationController.sendMessage()`**:
+  - Wrap the LLM streaming call in a try/catch block.
+  - If an `AIUnavailableException` (or similar) occurs, yield a standard `event: error` over the SSE stream with a user-friendly message (e.g., *"We are experiencing a temporary issue. Please try sending your message again."*).
+  - Crucially, do **not** change the `Conversation` status. Keep it as `QUALIFYING` so the user can literally retry their message seconds later without a broken state machine.
+
+## Verification Plan
+### Automated Tests
+- Create `test-recovery.ts` to simulate a Redis wipe mid-conversation, verify `SessionService` rebuilds state from Postgres, and confirm the conversation successfully completes.
+- Create `test-abandonment.ts` to inject an old conversation with partial data into PostgreSQL, trigger the Cron, and assert that a Lead with status `ABANDONED` is created.
+- Create `test-ai-error.ts` to force an AI exception and verify that the API returns an `event: error` while the Database status remains `QUALIFYING`.
