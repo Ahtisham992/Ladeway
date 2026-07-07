@@ -5,6 +5,8 @@ import { IndustryConfigService } from '../industry-config/industry-config.servic
 import { PromptService } from '../ai/prompt.service';
 import { LLMRouterService } from '../ai/llm-router.service';
 import { QualificationEngineService } from '../qualification/qualification-engine.service';
+import { ExtractorService } from '../ai/extractor.service';
+import { LeadService } from '../lead/lead.service';
 import { StartConversationResponse } from './types/conversation.types';
 import { ConversationStatus } from '../session/types/session.types';
 import { QualificationAction } from '../qualification/types/qualification.types';
@@ -21,6 +23,8 @@ export class ConversationService {
     private readonly promptService: PromptService,
     private readonly llmRouter: LLMRouterService,
     private readonly qualificationEngine: QualificationEngineService,
+    private readonly extractor: ExtractorService,
+    private readonly leadService: LeadService,
   ) {}
 
   async startConversation(configId: string): Promise<StartConversationResponse> {
@@ -125,22 +129,71 @@ export class ConversationService {
         content: fullResponse,
       },
     });
+    
+    messages.push({ role: 'assistant', content: fullResponse });
 
     // Determine next state
-    const nextAction = this.qualificationEngine.getNextAction(session, config, userMessage);
+    let nextAction = this.qualificationEngine.getNextAction(session, config, userMessage);
     let newStatus = session.status;
+    let currentSession = session;
 
     if (nextAction === QualificationAction.TRIGGER_EXTRACTION) {
-      this.logger.log(`[Phase 11 Placeholder] Triggering extraction for session ${sessionToken}`);
-      // Phase 11 will handle extraction here. For now, continue qualifying.
-    } else if (nextAction === QualificationAction.TRIGGER_TRANSFER) {
+      this.logger.log(`Triggering extraction for session ${sessionToken}`);
+      
+      const extractionResult = await this.extractor.extract(config, currentSession, messages);
+      
+      const extractedValues: Record<string, string> = {};
+      const newExtractedData = [];
+      const newMissingFields = [...currentSession.missingFields];
+      
+      for (const [key, field] of Object.entries(extractionResult)) {
+        if (field.value !== null) {
+          extractedValues[key] = field.value;
+          newExtractedData.push({
+            conversationId: currentSession.conversationId,
+            fieldKey: key,
+            fieldValue: field.value,
+            confidence: field.confidence
+          });
+          
+          if (field.confidence >= 0.6) {
+            const index = newMissingFields.indexOf(key);
+            if (index !== -1) {
+              newMissingFields.splice(index, 1);
+            }
+          }
+        }
+      }
+
+      if (newExtractedData.length > 0) {
+        await this.prisma.$system.extractedData.createMany({
+          data: newExtractedData
+        });
+        
+        const mergedCapturedFields = { ...currentSession.capturedFields, ...extractedValues };
+        
+        await this.sessionService.updateSession(sessionToken, {
+          capturedFields: mergedCapturedFields,
+          missingFields: newMissingFields
+        });
+        
+        const updatedSession = await this.sessionService.getSession(sessionToken);
+        if (updatedSession) {
+          currentSession = updatedSession;
+        }
+
+        nextAction = this.qualificationEngine.getNextAction(currentSession, config, userMessage);
+      }
+    }
+
+    if (nextAction === QualificationAction.TRIGGER_TRANSFER) {
       newStatus = ConversationStatus.TRANSFERRED;
     } else if (nextAction === QualificationAction.CLOSE_CONVERSATION) {
       newStatus = ConversationStatus.CLOSED;
     }
 
     const updatedSession = await this.sessionService.updateSession(sessionToken, {
-      turnCount: session.turnCount + 1,
+      turnCount: currentSession.turnCount + 1,
       status: newStatus,
     });
 
@@ -152,6 +205,11 @@ export class ConversationService {
           status: newStatus,
           completedAt: new Date(),
         },
+      });
+      
+      // Phase 12: Trigger Lead Creation asynchronously
+      this.leadService.createLeadFromConversation(session.conversationId).catch(err => {
+        this.logger.error(`Failed to create lead for conversation ${session.conversationId}`, err.stack);
       });
     }
 

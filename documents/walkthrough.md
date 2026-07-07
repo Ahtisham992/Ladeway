@@ -315,3 +315,110 @@ Added a new `updateSession` method to support bulk updates in a single Redis rou
 
 With the API layer functional, the missing link in our state machine is the structured data extraction. 
 We can now proceed to **Phase 11: Structured Data Extractor**, where we'll fulfill the placeholder in the service to parse out structured data points in the background!
+
+
+
+# Phase 11 Complete — Structured Data Extractor
+
+Phase 11 is fully implemented! Ladeway can now autonomously extract structured JSON intel from unstructured conversation transcripts, validate the confidence of the fields, and persist them natively in Postgres.
+
+## What was built
+
+### 1. Robust Extractor Service
+- Implemented `ExtractorService` inside the `AIModule` to handle data extraction.
+- **Resilient JSON Parsing**: Built a fallback mechanism that strips out markdown fences (e.g. ` ```json `) safely. 
+- **Confidence Scoring Fallback**: Handled cases where the LLM might return a flat string instead of the nested `{ value, confidence }` object, gracefully defaulting the confidence to `0.8` ("extracted but unverified") as requested.
+
+### 2. Hardened Extraction Prompts
+- Updated `assembleExtractionPrompt` inside `PromptService` with an extremely explicit output schema and rule set.
+- Ensured the LLM returns `null` with confidence `0` for unmentioned fields, and assigns accurate confidence scores (`0.9+` = explicit, `0.7` = implied, `0.5` = uncertain) to successfully extracted values.
+
+### 3. Integrated State Wiring
+- **`ConversationService` Integration**: Replaced the Phase 11 placeholder inside the main conversation loop. After the LLM streaming response finishes, if `QualificationEngine` triggers `TRIGGER_EXTRACTION`:
+  - `ExtractorService` processes the conversation history.
+  - Newly acquired fields are injected securely into the `ExtractedData` Postgres table.
+  - The Redis session `capturedFields` and `missingFields` are properly reconciled.
+  - Most critically, the session state is freshly reloaded and `getNextAction` is re-evaluated immediately, guaranteeing the conversation gracefully closes out if all fields were satisfied on that exact turn.
+- **`AbandonmentCronService` Integration**: Wired the cron to trigger partial extractions for abandoned sessions if the user completed at least 50% of the required qualification fields.
+
+### 4. End-to-End Verification
+- Wrote and executed an automated end-to-end extraction script against a mock Logistics conversation.
+- The local inference ran flawlessly, correctly parsing the fields:
+  ```json
+  {
+    "origin": { "value": "New York", "confidence": 1 },
+    "destination": { "value": "London", "confidence": 1 },
+    "timeline": { "value": "next month", "confidence": 1 }
+  }
+  ```
+- Implemented and passed strict Jest unit tests (`extractor.service.spec.ts`) validating the custom parsing fallback mechanisms.
+
+## Next Steps
+
+With the data extraction layer functional, we are almost at the end of Stage 2. We are now ready to proceed to the final step of this stage: **Phase 12: Lead Scoring Engine & Lead Creation**!
+
+# Phase 12 Complete — Lead Scoring Engine & Lead Creation
+
+Phase 12 is fully implemented! Every completed or abandoned (partial) conversation now produces a scored, tiered, and summarized `Lead` record in the database.
+
+## What was built
+
+### 1. Dynamic Scoring Engine
+- Created `ScoringService` in the `QualificationModule`.
+- Implemented `score(rules, extractedData)` which dynamically evaluates rules (`equals`, `greater_than`, `less_than`, `in`, `present`) directly from the JSON `IndustryConfig` against the LLM-extracted data points.
+- **Dynamic Tiering**: The scoring engine successfully handles fixed tier overrides (e.g., if a customer is moving ASAP, they are immediately flagged as `HOT`), and gracefully falls back to dynamic scoring weights to assign the appropriate lead tier (`HOT`, `WARM`, `COLD`) if no override matches.
+
+### 2. Lead Module & Single-Sentence AI Summary
+- Created the new `LeadModule` and `LeadService`.
+- **Contact Info Extraction**: Added flexible logic to extract common identifying keys (`name`, `email`, `phone`) directly from the ExtractedData array without strictly requiring exact key names.
+- **LLM Summary Generation**: Updated the `PromptService` with an extremely strict prompt restricting Llama 3 to output a single, max 20-word sentence in a specific format (`[Contact type] inquiry from [location/context], [key detail], timeline [timeline].`), avoiding broken dashboard UI layouts.
+
+### 3. Asynchronous Triggers
+- **Conversation Service**: Hooked up lead creation inside `ConversationService`. The moment the conversation state hits `CLOSED` or `TRANSFERRED`, the `LeadService` is invoked asynchronously to calculate the score, fetch the AI summary, and persist the row.
+- **Abandonment Cron**: Also integrated into the `AbandonmentCronService` to ensure we capture Leads for abandoned conversations if they successfully captured at least 50% of the required data.
+
+## Next Steps
+
+With the Lead data correctly captured and scored, Stage 2 of Ladeway is officially fully complete! We are now ready to jump into Stage 3 (Frontend & Ops), starting with **Phase 13: Lead Management APIs**.
+
+
+# Phase 12 Walkthrough
+
+## What I accomplished
+1. **Fixed Qualification Engine State Machine Loop**:
+   - The engine was stuck in a state where an extraction trigger during the final turn caused `getNextAction` to trigger extraction again, instead of advancing to `CLOSE_CONVERSATION`.
+   - Moved the `missingFields.length === 0` check (Priority 3) to be evaluated *before* the even-turn extraction trigger (Priority 2) in `qualification-engine.service.ts`.
+2. **Fixed LLM Extraction Threshold Issue**:
+   - The AI would hallucinate or low-confidence match missing fields (e.g., matching "next month" with confidence `0.5`). 
+   - I updated the `conversation.service.ts` extraction flow so it only clears fields from `missingFields` if `confidence >= 0.6`.
+3. **Contact Information Universal Extraction**:
+   - We ensure universal capture by adding the contact keys (`name`, `email`, `phone`) as non-blocking `required: false` variables directly in our seed configs.
+   - We updated `extractor.service.ts` to statically search for those fields and extract them regardless of whether the state machine tracks them as "missing".
+4. **Tested E2E across Industries**:
+   - **Logistics E2E**: Successfully transitioned the conversation to `CLOSED` and asynchronously created a `HOT` tier lead.
+   - **Real Estate E2E**: Successfully gathered properties, budget, and timeline within two turns, closed the conversation, and asynchronously created a `COLD` tier lead for the rental.
+
+## Validation Results
+- Verified that **Conversation Table** transitions to `CLOSED`.
+- Verified that **ExtractedData Table** correctly captures structured records with confidences.
+- Verified that **Leads Table** successfully creates records asynchronously on the `conversation.closed` event with the correct Contact Info, Tier, Score, and 1-sentence LLM-generated summary.
+
+Next up, we are ready to move on to **Phase 13 (Lead Management APIs)** in Stage 3.
+
+# Groq API Integration & Real Estate Scoring Fixes
+
+## What I accomplished
+1. **Groq API Migration**:
+   - Replaced the local Ollama LLM provider with the Groq API for significantly lower latency and reliable generation.
+   - Integrated the official `groq-sdk` package in the backend API.
+   - Implemented streaming responses via Groq utilizing `llama-3.1-8b-instant`.
+2. **Fixed Real Estate Scoring Rules**:
+   - Updated the Real Estate seed data to handle varying fields like `budget`, `purchase_timeline`, `location`, and `pre_approval`.
+   - Used the `present` condition for these fields to award weights flexibly whenever the required data is captured.
+3. **Improved JSON Extraction & Lead Summarization**:
+   - Hardened `ExtractorService` to strictly parse only the `{...}` JSON substring from Groq's extraction response, ignoring any LLM conversational preambles.
+   - Refined `PromptService`'s lead summary generator to dynamically adapt to missing or differently named fields (e.g. omitting the timeline if uncaptured instead of outputting "timeline unknown").
+4. **Validation Results**:
+   - Verified that the `test-e2e-realestate.ts` test now flawlessly triggers extraction via Groq.
+   - Confirmed Lead creation correctly assigns the `HOT` tier (Score: `0.8`) with a clean, single-sentence summary.
+   - Organized all integration scripts (`test-e2e.ts`, `test-e2e-realestate.ts`, `test-extraction.ts`, etc.) into a dedicated `apps/api/test` directory.

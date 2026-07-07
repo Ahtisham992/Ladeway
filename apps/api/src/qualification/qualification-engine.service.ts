@@ -45,15 +45,15 @@ export class QualificationEngineService {
       return QualificationAction.TRIGGER_TRANSFER;
     }
 
-    // Priority 2: If we have enough turns to attempt extraction
+    // Priority 2: All fields already captured from previous extraction
+    if (session.missingFields.length === 0) {
+      return QualificationAction.CLOSE_CONVERSATION;
+    }
+
+    // Priority 3: If we have enough turns to attempt extraction
     // Run every 2 turns OR if turnCount >= 4 (enough context)
     if (session.turnCount >= 2 && session.turnCount % 2 === 0) {
       return QualificationAction.TRIGGER_EXTRACTION;
-    }
-
-    // Priority 3: All fields already captured from previous extraction
-    if (session.missingFields.length === 0) {
-      return QualificationAction.CLOSE_CONVERSATION;
     }
 
     // Default: keep qualifying

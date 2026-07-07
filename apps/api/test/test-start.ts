@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './src/app.module';
-import { ConversationService } from './src/conversation/conversation.service';
+import { AppModule } from '../src/app.module';
+import { ConversationService } from '../src/conversation/conversation.service';
 
 async function test() {
   const app = await NestFactory.createApplicationContext(AppModule);

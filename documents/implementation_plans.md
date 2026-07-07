@@ -678,3 +678,128 @@ Register `ConversationModule`
    ```
 3. Verify messages appear in PostgreSQL after the stream completes
 4. Verify Redis session is updated with new turn count
+
+# Phase 11 — Structured Data Extractor
+
+This phase implements the `ExtractorService` inside the `AIModule`. The extractor analyzes the raw conversation transcript and reliably converts it into a typed, structured JSON object with field-level confidence scores. It then persists these as `ExtractedData` rows in PostgreSQL. We will also wire up the `TRIGGER_EXTRACTION` placeholder in `ConversationService` and `AbandonmentCronService`.
+
+## Open Questions
+
+> [!NOTE]
+> **Confidence Scoring**
+> The model will output extracted values. Should the LLM generate the confidence score itself as part of the JSON output, or should we assign a default confidence (e.g., 1.0) when it successfully extracts a field?
+> *Recommendation: Have the LLM return a confidence score (0.0 to 1.0) along with the value in the JSON payload (e.g., `{"origin": {"value": "New York", "confidence": 0.95}}`).*
+
+## Proposed Changes
+
+### 1. Extractor Service & AI Module
+#### [NEW] `apps/api/src/ai/types/extractor.types.ts`
+Define the types for the extraction result:
+```typescript
+export interface ExtractedField {
+  value: string | null;
+  confidence: number;
+}
+export type ExtractionResult = Record<string, ExtractedField>;
+```
+
+#### [NEW] `apps/api/src/ai/extractor.service.ts`
+Implement `ExtractorService`:
+- **`extract(configId: string, conversationId: string): Promise<ExtractionResult>`**
+  - Fetches the conversation messages from PostgreSQL.
+  - Fetches the `IndustryConfig`.
+  - Builds the extraction prompt via `PromptService.assembleExtractionPrompt`.
+  - Calls `LLMRouterService.stream()` and aggregates the response.
+  - Parses the JSON.
+  - **Error Recovery:** If parsing fails, strips markdown fences (e.g. ` ```json `). If still failing, retries once with a stricter prompt.
+  - Returns the parsed `ExtractionResult`.
+
+#### [MODIFY] `apps/api/src/ai/prompt.service.ts`
+Update `assembleExtractionPrompt` to explicitly instruct the LLM to return values and confidence scores matching the schema: `{"field_key": {"value": "extracted text", "confidence": 0.9}}`.
+
+#### [MODIFY] `apps/api/src/ai/ai.module.ts`
+Provide and export `ExtractorService`.
+
+### 2. Wiring up the Extraction Triggers
+#### [MODIFY] `apps/api/src/conversation/conversation.service.ts`
+In the `sendMessage` flow, after `getNextAction()` returns `TRIGGER_EXTRACTION`:
+- Call `ExtractorService.extract(config.id, session.conversationId)`.
+- Update PostgreSQL `ExtractedData` table with the new fields (upsert).
+- Update the Redis session's `missingFields` and `capturedFields` based on the extraction result.
+- If `missingFields` is now empty, immediately update the state to `EXTRACTING` and transition to `CLOSE_CONVERSATION`.
+
+#### [MODIFY] `apps/api/src/qualification/abandonment-cron.service.ts`
+Replace the `// TODO: Phase 11` placeholder:
+- For abandoned conversations, check if `>= 50%` of required fields are captured.
+- If so, call `ExtractorService.extract()` to ensure partial data is saved.
+
+### 3. Unit & Integration Testing
+#### [NEW] `apps/api/src/ai/extractor.service.spec.ts`
+Implement test cases:
+1. Valid JSON extraction mock.
+2. Error recovery (malformed JSON with markdown fences).
+3. Fallback on invalid JSON retry.
+
+#### [NEW] `apps/api/test-extraction.ts` (Temporary Test Script)
+Write a script to test the extraction logic end-to-end against a mock 10-turn conversation (Logistics) to verify the prompt and parsing work seamlessly with the Llama 3 model.
+
+## Verification Plan
+
+### Automated Tests
+- Run `npm run test` (or `npx jest extractor.service.spec.ts`) to verify parsing and error recovery logic.
+
+### Manual Verification
+- Execute `npx ts-node test-extraction.ts` and verify that all requested fields are extracted properly, missing fields return `null`, and confidence scores are assigned.
+- Complete a conversation via the API and verify that `ExtractedData` rows appear in the database.
+
+# Phase 12 — Lead Scoring Engine & Lead Creation
+
+This phase implements the structured business output of the qualification process. Every completed conversation will produce a scored, tiered, and summarised `Lead` record in the database.
+
+## Open Questions
+
+> [!NOTE]
+> **Contact Information Mapping**
+> The `Lead` schema requires `contactName`, `contactEmail`, and `contactPhone`. Should we hardcode the system to look for specific extraction keys (e.g., `name`, `email`, `phone`) within `ExtractedData` to map to these columns, or should we just leave them null for now if they aren't explicitly defined as standard keys?
+> *Recommendation: Look for common keys (`name`, `contact_name`, `email`, `phone`) in the `ExtractedData`. If found, map them to the Lead row. Otherwise, leave null.*
+
+## Proposed Changes
+
+### 1. Qualification Module & Scoring Service
+#### [NEW] `apps/api/src/qualification/scoring.service.ts`
+Implement `ScoringService`:
+- **`score(rules: ScoringRule[], extractedData: ExtractedData[]): { score: number, tier: LeadTier }`**
+  - Iterates through the IndustryConfig's `scoringRulesJson`.
+  - Evaluates each condition (`present`, `equals`, `greater_than`, `less_than`, `in`) against the extracted data values.
+  - Sums the `weight` of all matching rules.
+  - Determines the default tier based on the final score (e.g., `> 80 = HOT`, `50-79 = WARM`, `< 50 = COLD`).
+  - If a matching rule includes a specific `tier` override, it applies that override (useful for "dealbreaker" rules).
+
+### 2. Lead Generation & Summarization
+#### [MODIFY] `apps/api/src/ai/prompt.service.ts`
+- Add **`assembleLeadSummaryPrompt(config, extractedData)`**: Generates a prompt instructing the LLM to write a concise, single-sentence plain-language summary of the lead based on the extracted data.
+
+#### [NEW] `apps/api/src/lead/lead.service.ts` (and LeadModule)
+Implement `LeadService`:
+- **`createLeadFromConversation(conversationId: string): Promise<Lead>`**
+  - Fetches the `Conversation`, `IndustryConfig`, and `ExtractedData`.
+  - Calls `ScoringService.score()`.
+  - Calls `LLMRouterService.generateSingleToken()` (or stream) with `assembleLeadSummaryPrompt` to generate the summary.
+  - Extracts `contactName`, `contactEmail`, `contactPhone` from `ExtractedData` if available.
+  - Creates the `Lead` record in PostgreSQL.
+
+### 3. Wiring up the Triggers
+#### [MODIFY] `apps/api/src/conversation/conversation.service.ts`
+- When `nextAction` evaluates to `CLOSE_CONVERSATION` or `TRIGGER_TRANSFER`, invoke `LeadService.createLeadFromConversation(session.conversationId)` asynchronously (or synchronously before returning the final stream chunk) so the Lead is immediately available in the dashboard.
+
+#### [MODIFY] `apps/api/src/qualification/abandonment-cron.service.ts`
+- After triggering partial extraction for an abandoned conversation, invoke `LeadService.createLeadFromConversation()` to ensure we still capture partial leads for abandoned chats!
+
+## Verification Plan
+
+### Automated Tests
+- Create `scoring.service.spec.ts` to strictly unit test the `score()` mathematical logic, ensuring all operators (`equals`, `greater_than`, `in`, etc.) evaluate correctly against mock extracted data.
+
+### Manual Verification
+- Complete a full test conversation via the `POST /conversations/:id/message` endpoint.
+- Verify in PostgreSQL that a `Lead` record is successfully created with a calculated score, assigned tier, and an LLM-generated plain-language summary.

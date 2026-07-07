@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AIUnavailableException } from './ai.exceptions';
+import { Groq } from 'groq-sdk';
 
 export interface LLMMessage {
   role: 'system' | 'user' | 'assistant';
@@ -34,10 +35,8 @@ export class LLMRouterService {
           yield* this.streamOllama(messages, options);
           return; // Success
         } else if (provider === 'groq') {
-          // Uncomment below when Groq is activated
-          // yield* this.streamGroq(messages, options);
-          // return;
-          throw new Error('Groq provider is currently inactive.');
+          yield* this.streamGroq(messages, options);
+          return;
         } else {
           throw new Error(`Unsupported LLM Provider: ${provider}`);
         }
@@ -117,54 +116,22 @@ export class LLMRouterService {
       throw new Error('GROQ_API_KEY is not configured');
     }
 
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'llama3-8b-8192', // or any standard groq model
-        messages,
-        stream: true,
-        temperature: options?.temperature,
-        max_tokens: options?.maxTokens,
-      }),
+    const groq = new Groq({ apiKey });
+
+    const chatCompletion = await groq.chat.completions.create({
+      messages: messages as any,
+      model: 'llama-3.1-8b-instant', // using the model requested by the user
+      stream: true,
+      temperature: options?.temperature ?? 1,
+      max_completion_tokens: options?.maxTokens ?? 1024,
+      top_p: 1,
+      stop: null,
     });
 
-    if (!response.ok) {
-      throw new Error(`Groq API returned status ${response.status}`);
-    }
-
-    if (!response.body) {
-      throw new Error('Response body is missing');
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const lines = decoder.decode(value, { stream: true }).split('\n').filter(Boolean);
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-        
-        if (trimmed === 'data: [DONE]') return; // handle this before JSON.parse
-
-        if (!trimmed.startsWith('data: ')) continue;
-        
-        try {
-          const chunk = JSON.parse(trimmed.slice(6));
-          const content = chunk.choices?.[0]?.delta?.content;
-          if (content) {
-            yield content;
-          }
-        } catch {
-          // incomplete chunk - continue
-        }
+    for await (const chunk of chatCompletion) {
+      const content = chunk.choices[0]?.delta?.content;
+      if (content) {
+        yield content;
       }
     }
   }

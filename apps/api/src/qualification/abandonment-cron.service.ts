@@ -3,6 +3,8 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../database/prisma.service';
 import { SessionService } from '../session/session.service';
 import { ConversationStatus } from '../session/types/session.types';
+import { ExtractorService } from '../ai/extractor.service';
+import { LeadService } from '../lead/lead.service';
 
 @Injectable()
 export class AbandonmentCronService {
@@ -11,6 +13,8 @@ export class AbandonmentCronService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sessionService: SessionService,
+    private readonly extractor: ExtractorService,
+    private readonly leadService: LeadService,
   ) {}
 
   /**
@@ -36,6 +40,7 @@ export class AbandonmentCronService {
       select: {
         id: true,
         sessionToken: true,
+        configId: true,
       },
     });
 
@@ -60,7 +65,53 @@ export class AbandonmentCronService {
       // Clean up Redis session
       await this.sessionService.deleteSession(conv.sessionToken);
 
-      // TODO: Phase 11 — trigger partial extraction if ≥50% of fields were captured
+      // Trigger partial extraction if ≥50% of fields were captured
+      const config = await this.prisma.industryConfig.findUnique({ where: { id: conv.configId } });
+      const session = await this.sessionService.getSession(conv.sessionToken);
+      
+      if (config && session) {
+        const fieldsJson = config.fieldsJson as any[];
+        const totalFields = fieldsJson.filter(f => f.required).length;
+        const capturedFieldsCount = Object.keys(session.capturedFields).length;
+        
+        if (totalFields > 0 && (capturedFieldsCount / totalFields) >= 0.5) {
+          this.logger.log(`Triggering partial extraction for ABANDONED conversation ${conv.id}`);
+          
+          const history = await this.prisma.message.findMany({
+            where: { conversationId: conv.id },
+            orderBy: { timestamp: 'asc' },
+          });
+          
+          const messages = history.map(m => ({
+            role: m.sender === 'ai' ? 'assistant' : 'user' as any,
+            content: m.content,
+          }));
+
+          const extractionResult = await this.extractor.extract(config as any, session, messages);
+          
+          const newExtractedData = [];
+          for (const [key, field] of Object.entries(extractionResult)) {
+            if (field.value !== null) {
+              newExtractedData.push({
+                conversationId: session.conversationId,
+                fieldKey: key,
+                fieldValue: field.value,
+                confidence: field.confidence
+              });
+            }
+          }
+
+          if (newExtractedData.length > 0) {
+            await this.prisma.extractedData.createMany({ data: newExtractedData });
+          }
+          
+          try {
+            await this.leadService.createLeadFromConversation(conv.id);
+          } catch (err: any) {
+            this.logger.error(`Failed to create lead for abandoned conversation ${conv.id}`, err.stack);
+          }
+        }
+      }
 
       this.logger.log(`Marked conversation ${conv.id} as ABANDONED`);
     }
