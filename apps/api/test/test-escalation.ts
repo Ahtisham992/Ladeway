@@ -11,7 +11,7 @@ async function runTest() {
   console.log('--- STARTING ESCALATION E2E TEST ---');
   
   const config = await prisma.industryConfig.findFirst({
-    where: { isActive: true },
+    where: { industryName: 'Logistics / Moving', isActive: true },
     orderBy: { createdAt: 'desc' }
   });
 
