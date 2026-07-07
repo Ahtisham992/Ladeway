@@ -83,9 +83,13 @@ export class ConversationService {
   }
 
   async *sendMessage(sessionToken: string, userMessage: string): AsyncIterable<string> {
-    const session = await this.sessionService.getSession(sessionToken);
+    let session = await this.sessionService.getSession(sessionToken);
+    
     if (!session) {
-      throw new NotFoundException('Session expired or invalid');
+      session = await this.recoverSession(sessionToken);
+      if (!session) {
+        throw new NotFoundException('Session expired and could not be recovered');
+      }
     }
 
     const config = await this.configService.getActiveConfig(session.configId) as any;
@@ -111,14 +115,27 @@ export class ConversationService {
       content: m.content,
     }));
 
-    const prompt = this.promptService.assembleConversationPrompt(config, session, messages);
-
+    let nextAction = this.qualificationEngine.getNextAction(session, config, userMessage);
     let fullResponse = '';
     
-    // Stream response
-    for await (const token of this.llmRouter.stream(prompt)) {
-      fullResponse += token;
-      yield token;
+    if (nextAction === QualificationAction.TRIGGER_TRANSFER) {
+      fullResponse = "I've noted your request to speak with a team member. I'm transferring your conversation now, and someone will be in touch shortly.";
+      const words = fullResponse.split(' ');
+      for (const word of words) {
+        yield word + (word === words[words.length - 1] ? '' : ' ');
+        await new Promise(r => setTimeout(r, 20));
+      }
+    } else {
+      const prompt = this.promptService.assembleConversationPrompt(config, session, messages);
+      try {
+        for await (const token of this.llmRouter.stream(prompt)) {
+          fullResponse += token;
+          yield token;
+        }
+      } catch (error: any) {
+        this.logger.error(`AI Streaming Error: ${error.message}`, error.stack);
+        throw new Error('AI service temporarily unavailable. Please try again.');
+      }
     }
 
     // Post-stream logic
@@ -132,13 +149,12 @@ export class ConversationService {
     
     messages.push({ role: 'assistant', content: fullResponse });
 
-    // Determine next state
-    let nextAction = this.qualificationEngine.getNextAction(session, config, userMessage);
     let newStatus = session.status;
     let currentSession = session;
 
-    if (nextAction === QualificationAction.TRIGGER_EXTRACTION) {
-      this.logger.log(`Triggering extraction for session ${sessionToken}`);
+    // We run extraction on TRIGGER_EXTRACTION and TRIGGER_TRANSFER
+    if (nextAction === QualificationAction.TRIGGER_EXTRACTION || nextAction === QualificationAction.TRIGGER_TRANSFER) {
+      this.logger.log(`Triggering extraction for session ${sessionToken} with action ${nextAction}`);
       
       const extractionResult = await this.extractor.extract(config, currentSession, messages);
       
@@ -182,7 +198,10 @@ export class ConversationService {
           currentSession = updatedSession;
         }
 
-        nextAction = this.qualificationEngine.getNextAction(currentSession, config, userMessage);
+        // Only re-evaluate if it was TRIGGER_EXTRACTION, as we might have completed all fields
+        if (nextAction === QualificationAction.TRIGGER_EXTRACTION) {
+          nextAction = this.qualificationEngine.getNextAction(currentSession, config, userMessage);
+        }
       }
     }
 
@@ -219,5 +238,67 @@ export class ConversationService {
       status: updatedSession!.status,
       turnCount: updatedSession!.turnCount,
     });
+  }
+
+  private async recoverSession(sessionToken: string): Promise<any | null> {
+    // Find conversation in PostgreSQL by sessionToken
+    const conversation = await this.prisma.$system.conversation.findUnique({
+      where: { sessionToken },
+      include: { config: true, messages: { orderBy: { timestamp: 'asc' } } }
+    });
+    
+    if (!conversation || ['CLOSED','TRANSFERRED','ABANDONED'].includes(conversation.status)) {
+      return null;
+    }
+
+    const messages = conversation.messages.map(m => ({
+      role: m.sender === 'ai' ? 'assistant' : 'user',
+      content: m.content
+    }));
+
+    // Re-derive captured fields from message history
+    const extractionResult = await this.extractor.extract(
+      conversation.config as any,
+      {
+        conversationId: conversation.id,
+        tenantId: conversation.tenantId,
+        configId: conversation.configId,
+        status: conversation.status as ConversationStatus,
+        capturedFields: {},
+        missingFields: (conversation.config.fieldsJson as any[]).map(f => f.key),
+        turnCount: Math.floor(conversation.messages.length / 2) + 1,
+        lastActivityAt: new Date().toISOString()
+      },
+      messages as any
+    );
+    
+    const allFields = conversation.config.fieldsJson as any[];
+    const requiredFields = allFields.filter(f => f.required).map(f => f.key);
+    const capturedKeys = Object.keys(extractionResult).filter(k => extractionResult[k]?.value);
+    
+    const recoveredSession = {
+      conversationId: conversation.id,
+      tenantId: conversation.tenantId,
+      configId: conversation.configId,
+      status: conversation.status as ConversationStatus,
+      capturedFields: Object.fromEntries(
+        capturedKeys.map(k => [k, extractionResult[k].value as string])
+      ),
+      missingFields: requiredFields.filter(k => !capturedKeys.includes(k)),
+      turnCount: Math.floor(conversation.messages.length / 2) + 1,
+      lastActivityAt: new Date().toISOString()
+    };
+    
+    // Re-store in Redis with fresh 24h TTL
+    await this.sessionService.createSession(
+      sessionToken,
+      conversation.id,
+      conversation.configId,
+      conversation.tenantId
+    );
+    // Since createSession initializes empty fields, we must update it with the recovered data
+    await this.sessionService.updateSession(sessionToken, recoveredSession);
+    
+    return recoveredSession;
   }
 }
