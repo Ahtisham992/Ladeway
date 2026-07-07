@@ -552,3 +552,16 @@ Phase 16 hardened the IndustryConfig APIs to ensure they are production-ready fo
 ### 4. Zero-Record Preview Endpoint
 - **Implementation:** Added `GET /configs/:id/preview?message=...` to allow administrators to simulate a one-turn conversation with the configured persona.
 - **Verification:** It successfully returns the generated LLM response dynamically based on the requested tone/persona without creating *any* junk records in the PostgreSQL database. Verified via `test-config-crud.ts`.
+
+
+# Phase 17: Analytics Data Layer
+
+**Goal**: Provide the core data APIs for the frontend analytics dashboards, aggregating conversation and lead data efficiently.
+
+**Implementation Highlights**:
+1. **Raw SQL Optimization**: We opted to bypass Prisma's middleware transaction overhead using `Prisma.sql` and `$queryRaw` to concurrently calculate aggregated summary data (Conversations by status, Average turn count, Leads by tier, Industry funnel metrics).
+2. **Time-series endpoints**: Added time-series grouping endpoints (`/analytics/conversations`, `/analytics/leads`) utilizing PostgreSQL's `DATE_TRUNC` function for charting.
+3. **RBAC Guarding**: Strictly secured all three new endpoints (`/analytics/summary`, `/analytics/conversations`, `/analytics/leads`) with `@Roles('ADMIN')`. The REP role correctly receives a `403 Forbidden`.
+4. **Performance Indexes**: Added targeted composite indexes (`tenantId, status`, `tenantId, startedAt`, `tenantId, tier`, `tenantId, createdAt`) directly into the `schema.prisma` to keep aggregation fast at scale.
+
+**Verification**: E2E test scripts created 20 dummy conversations, 100 messages, and 15 leads, executing raw queries correctly via `Promise.all` and parsing counts, successfully matching funnel logic securely. This wraps up all 17 backend phases.

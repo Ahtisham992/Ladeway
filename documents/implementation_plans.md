@@ -967,3 +967,60 @@ We will create a new integration test suite (`test-config-crud.ts`) that verifie
 > [!NOTE]  
 > **Preview Endpoint Structure**  
 > Should the `/configs/:id/preview` endpoint be a streaming endpoint using SSE (similar to the real chat API), or a standard JSON endpoint that waits for the full text generation to simplify the frontend dashboard integration later?
+
+
+
+# Phase 17 — Analytics Data Layer
+
+This phase focuses on building the data aggregation layer required to power the admin dashboard. We will introduce an `AnalyticsModule` that queries PostgreSQL to generate key performance indicators, time-series data for charting, and funnel metrics.
+
+## Goal
+To implement a robust and efficient `AnalyticsService` capable of aggregating conversation and lead data per tenant, supporting date range filtering, and providing structured metrics for the Next.js frontend.
+
+## Proposed Changes
+
+### 1. Analytics Module Setup
+- **[NEW] `apps/api/src/analytics/analytics.module.ts`**: Standard module to encapsulate analytics logic.
+- **[NEW] `apps/api/src/analytics/analytics.controller.ts`**: Controller exposing endpoints for the frontend dashboard:
+  - `GET /analytics/summary`
+  - `GET /analytics/time-series`
+  - `GET /analytics/funnel`
+- **[NEW] `apps/api/src/analytics/analytics.service.ts`**: Core service containing the Prisma aggregation queries.
+
+### 2. Service Implementation Details
+The `AnalyticsService` will implement the following methods using Prisma's `groupBy` and aggregation features where possible, falling back to `$queryRaw` if advanced grouping is required:
+
+- **`getSummary(tenantId, startDate, endDate)`**: 
+  - `totalConversations`: Count of all conversations.
+  - `leadsGenerated`: Count of conversations with `status = 'CLOSED'` or `TRANSFERRED`.
+  - `conversionRate`: `(leadsGenerated / totalConversations) * 100`.
+  - `avgConversationLength`: Average number of `Message` rows per conversation.
+  - `leadsByTier`: Breakdown of HOT/WARM/COLD counts.
+
+- **`getConversationTimeSeries(tenantId, startDate, endDate)`**:
+  - Aggregates conversation counts by date (e.g., daily volume). 
+  - Will return an array of `{ date: string, count: number }` for frontend charting.
+
+- **`getLeadFunnelData(tenantId)`**:
+  - `totalStarted` (GREETING/QUALIFYING)
+  - `extracted` (EXTRACTING)
+  - `qualified` (SCORED/CLOSED/TRANSFERRED)
+  - `abandoned` (ABANDONED)
+
+### 3. Types Package Update
+- Modify `packages/types/src/analytics.ts` to ensure it matches the exact return types of the `AnalyticsService` endpoints so the Next.js dashboard can consume them with strong typing.
+
+## Verification Plan
+
+### Automated Tests
+- **[NEW] `apps/api/test/test-analytics.ts`**:
+  - We will create a test script that dynamically seeds 20+ dummy conversations and leads across various dates and statuses.
+  - We will query all three analytics endpoints and verify that the counts, averages, and time-series aggregations match the seeded data exactly.
+
+## Open Questions
+
+> [!NOTE]  
+> **Time-series Database Aggregation**  
+> We will likely use Prisma's `$queryRaw` to use PostgreSQL's `DATE_TRUNC('day', "startedAt")` for the time-series aggregation, as Prisma's native `groupBy` can be limited for date truncation. Let me know if you prefer native Prisma `findMany` followed by in-memory grouping for simplicity.
+
+

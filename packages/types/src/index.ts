@@ -66,7 +66,6 @@ export type {
 export type {
   AnalyticsSummary,
   TimeSeriesDataPoint,
-  LeadFunnelData,
   AnalyticsQuery,
 } from './analytics';
 
