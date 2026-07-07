@@ -1024,3 +1024,58 @@ The `AnalyticsService` will implement the following methods using Prisma's `grou
 > We will likely use Prisma's `$queryRaw` to use PostgreSQL's `DATE_TRUNC('day', "startedAt")` for the time-series aggregation, as Prisma's native `groupBy` can be limited for date truncation. Let me know if you prefer native Prisma `findMany` followed by in-memory grouping for simplicity.
 
 
+
+# phase 18 Goal Description
+
+Phase 18 focuses on establishing the Design System & Shared UI Components for the Next.js frontend. We will construct a scalable, reusable, and token-driven component library strictly adhering to the premium design spec (Section 16).
+
+## User Review Required
+
+We will install `clsx`, `tailwind-merge`, and `lucide-react`. These are standard utilities for building tailwind UI components and integrating SVG icons without bloating the bundle. 
+Please let me know if you prefer to avoid adding these dependencies and instead write manual string concatenation for class names and raw SVG imports.
+
+## Proposed Changes
+
+### Dependencies
+- **Install `clsx`, `tailwind-merge`**: for resolving standard className conflicts in reusable UI components.
+- **Install `lucide-react`**: for high quality, unified icons (spinners, table sort carets, close buttons).
+
+### Core Utility
+#### [NEW] [utils.ts](file:///d:/logistics/apps/web/lib/utils.ts)
+A helper to neatly merge default design tokens with consumer-provided overrides (e.g., `cn(...)`).
+
+### Component Library (`apps/web/components/ui/`)
+#### [NEW] [Button.tsx](file:///d:/logistics/apps/web/components/ui/Button.tsx)
+Supports `primary`, `secondary`, `ghost`, and `destructive` variants, along with sizes.
+#### [NEW] [Input.tsx](file:///d:/logistics/apps/web/components/ui/Input.tsx)
+Standardized form input matching the Deep Navy / Slate color scale.
+#### [NEW] [Textarea.tsx](file:///d:/logistics/apps/web/components/ui/Textarea.tsx)
+Multi-line input.
+#### [NEW] [Select.tsx](file:///d:/logistics/apps/web/components/ui/Select.tsx)
+Standard native or custom select dropdown matching design.
+#### [NEW] [Badge.tsx](file:///d:/logistics/apps/web/components/ui/Badge.tsx)
+Specifically hardcoded to support the lead tiers: Hot (green/success), Warm (amber/warning), and Cold (slate/neutral).
+#### [NEW] [Card.tsx](file:///d:/logistics/apps/web/components/ui/Card.tsx)
+A standardized container with correct spacing and box-shadows.
+#### [NEW] [Modal.tsx](file:///d:/logistics/apps/web/components/ui/Modal.tsx)
+Dialog wrapper with a backdrop and centered container.
+#### [NEW] [Spinner.tsx](file:///d:/logistics/apps/web/components/ui/Spinner.tsx)
+An animated SVG loading ring.
+#### [NEW] [Skeleton.tsx](file:///d:/logistics/apps/web/components/ui/Skeleton.tsx)
+A subtle pulse animation component for loading states.
+#### [NEW] [Table.tsx](file:///d:/logistics/apps/web/components/ui/Table.tsx)
+Includes `Table`, `TableRow`, `TableCell`, and `TableHeader` with built-in optional sorting indicators.
+
+### Configuration Validations
+#### [MODIFY] [tailwind.config.ts](file:///d:/logistics/apps/web/tailwind.config.ts)
+Verify the already initialized setup ensures `Inter` is the default font, and the Deep Navy (`#1F4E79`) and Slate (`#64748B`) colors are globally locked in.
+#### [MODIFY] [globals.css](file:///d:/logistics/apps/web/app/globals.css)
+Confirm variables match the tokens, apply basic `transition-default` of `150ms ease`.
+
+## Verification Plan
+
+### Automated Tests
+- Run `npm run type-check` across the frontend to guarantee zero strict-mode TypeScript errors.
+
+### Manual Verification
+- We will temporarily mount these components onto the existing frontend landing page (`apps/web/app/page.tsx` or a temporary `/design` route) to verify they render cleanly, interact perfectly (hover states), and contain zero hardcoded colors outside of the token system.

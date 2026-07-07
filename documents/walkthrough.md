@@ -565,3 +565,21 @@ Phase 16 hardened the IndustryConfig APIs to ensure they are production-ready fo
 4. **Performance Indexes**: Added targeted composite indexes (`tenantId, status`, `tenantId, startedAt`, `tenantId, tier`, `tenantId, createdAt`) directly into the `schema.prisma` to keep aggregation fast at scale.
 
 **Verification**: E2E test scripts created 20 dummy conversations, 100 messages, and 15 leads, executing raw queries correctly via `Promise.all` and parsing counts, successfully matching funnel logic securely. This wraps up all 17 backend phases.
+
+---
+
+## Phase 18: Design System & Shared UI Components
+
+**Goal**: Establish the foundational design tokens, typography, and base component library for the Next.js frontend to ensure every screen matches the premium design specification exactly.
+
+**Implementation Highlights**:
+1. **Utility & Dependencies**: Configured `clsx` and `tailwind-merge` within a central `cn()` utility (`lib/utils.ts`). Installed `lucide-react` for premium, consistent scalable vector icons (resolved React 18 type mismatches by updating `@types/react`).
+2. **Component Library Built**: Developed all 13 core components (`Button`, `Input`, `Textarea`, `Select`, `Badge`, `Card`, `Modal`, `Spinner`, `Skeleton`, `Table`) in `components/ui/`.
+3. **Exact Token Mapping**: 
+   - Overhauled `Badge.tsx` to explicitly handle all 6 possible backend states with their designated styles (`HOT`, `WARM`, `COLD`, `TRANSFERRED`, `ABANDONED`, `DEFAULT`).
+   - Extended `tailwind.config.ts` to include `primary-light` and `surface` tokens.
+4. **Developer Reference Gallery**: Created `apps/web/app/design/page.tsx` as a permanent design system component gallery. It displays side-by-side variants of all components, demonstrating focus, hover, disabled states, and the `150ms ease` animation spec.
+
+**Verification**: Ran `npm run type-check` strictly verifying the entire React TS codebase cleanly compiles.
+
+Moving directly to **Phase 19 (Chat Widget Component)** as requested next.

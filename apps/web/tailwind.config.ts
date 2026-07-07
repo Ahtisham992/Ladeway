@@ -24,6 +24,7 @@ const config: Config = {
       colors: {
         primary: {
           DEFAULT: '#1F4E79',
+          light: '#5F8FBF',
           50: '#EBF1F7',
           100: '#D7E3EF',
           200: '#AFC7DF',
@@ -47,6 +48,7 @@ const config: Config = {
           700: '#1E293B',
         },
         background: '#FAFAF9',
+        surface: '#FFFFFF',
         accent: {
           DEFAULT: '#B45309',
           50: '#FFF8EB',
