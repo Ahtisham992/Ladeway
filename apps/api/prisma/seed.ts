@@ -182,6 +182,78 @@ async function main() {
     },
   });
 
+  // Legal Services Config
+  await prisma.industryConfig.create({
+    data: {
+      tenantId: tenant.id,
+      industryName: 'Legal Services',
+      personaName: 'Michael',
+      personaRole: 'Legal Case Advisor',
+      greeting: "Hello, I'm Michael, a legal case advisor. I can help evaluate your situation. What type of legal issue are you facing?",
+      tone: 'professional and empathetic',
+      fieldsJson: [
+        {
+          key: 'case_type',
+          label: 'Case Type',
+          type: 'text',
+          required: true,
+          extractionHint: 'Type of legal case e.g. personal injury, family law',
+        },
+        {
+          key: 'incident_date',
+          label: 'Incident Date',
+          type: 'text',
+          required: true,
+          extractionHint: 'When the incident occurred',
+        },
+        {
+          key: 'injury_severity',
+          label: 'Injury Severity',
+          type: 'text',
+          required: true,
+          extractionHint: 'Severity level if personal injury',
+        },
+        {
+          key: 'jurisdiction',
+          label: 'Jurisdiction',
+          type: 'text',
+          required: true,
+          extractionHint: 'State/country where case would be filed',
+        },
+        {
+          key: 'has_existing_attorney',
+          label: 'Has Existing Attorney',
+          type: 'enum',
+          options: ['yes', 'no'],
+          required: true,
+          extractionHint: 'Whether they have a lawyer already',
+        },
+        { key: 'name', label: 'Name', type: 'text', required: false, extractionHint: 'Customer name' },
+        { key: 'email', label: 'Email', type: 'text', required: false, extractionHint: 'Customer email' },
+        { key: 'phone', label: 'Phone', type: 'text', required: false, extractionHint: 'Customer phone' },
+      ],
+      scoringRulesJson: [
+        {
+          field: 'has_existing_attorney',
+          condition: 'equals',
+          value: 'no',
+          weight: 0.9,
+          tier: 'HOT',
+        },
+        {
+          field: 'case_type',
+          condition: 'present',
+          weight: 0.4,
+        },
+        {
+          field: 'incident_date',
+          condition: 'present',
+          weight: 0.4,
+        },
+      ],
+    },
+  });
+
   console.log('Seeding completed successfully.');
 }
 
