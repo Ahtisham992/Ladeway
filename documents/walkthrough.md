@@ -613,3 +613,18 @@ Moving directly to **Phase 19 (Chat Widget Component)** as requested next.
 5. **Chat Route**: Completed `apps/web/app/chat/[configId]/page.tsx` providing a robust mobile-first layout containing the virtual assistant header wrapper over the functional `ChatWidget`.
 
 **Verification**: `npm run type-check` runs with 0 errors across the frontend repo. Component logic handles both empty start and active resume scenarios successfully.
+
+---
+
+## Phase 21: Multi-Industry Demo Landing Page
+
+**Goal**: Construct a polished, high-converting root landing page that dynamically showcases all available industry demonstrations using a robust server-side architecture.
+
+**Implementation Highlights**:
+1. **Server Component Architecture**: Rebuilt `apps/web/app/page.tsx` as an asynchronous Server Component. We securely query `process.env.API_URL` without exposing it to the client bundle, enforcing `{ cache: 'no-store' }` so new industry configs appear instantly upon creation.
+2. **Dynamic Grid Scaling**: Migrated from a strict two-column layout to a fully dynamic responsive grid (`grid-cols-1 md:grid-cols-2 lg:grid-cols-3`). This scales automatically for Logistics, Real Estate, Legal Services, and any future configs, visually reinforcing the data-driven engine.
+3. **Design System Integration**: Leveraged the `Card`, `CardHeader`, `CardTitle`, and `Button` components from Phase 18. Each card clearly routes the evaluator directly into the associated `/chat/[configId]` experience.
+4. **Resilient Fallback UX**: Implemented a graceful error boundary specifically for demo environments (like cold starts on Railway). If the backend is unreachable, it displays a non-blocking `AlertCircle` warning and populates the grid with mock `fallbackConfigs` to preserve the visual impact rather than crashing to a white screen.
+5. **Core Value Proposition**: Injected the requested messaging immediately below the grid: *"Same AI engine. Different industries. Configured entirely through data — no code changes."*
+
+**Verification**: Ran `npm run type-check` cleanly. The page securely consumes environment variables and constructs proper Next.js routing patterns.
