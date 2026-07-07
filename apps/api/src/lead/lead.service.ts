@@ -51,6 +51,11 @@ export class LeadService {
       .replace(/^summary:\s*/i, '')
       .trim();
 
+    const leadStatus = conversation.status === 'ABANDONED' ? 'ABANDONED' : 'NEW';
+    if (leadStatus === 'ABANDONED') {
+      summary = `[PARTIAL] ${summary}`;
+    }
+
     // 3. Contact Info
     const contactInfo = this.extractContactInfo(extractedData);
 
@@ -66,7 +71,7 @@ export class LeadService {
         score,
         tier,
         summary,
-        status: 'NEW',
+        status: leadStatus,
       },
     });
 
