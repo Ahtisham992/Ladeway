@@ -91,4 +91,31 @@ ${conversationContext}`;
       }
     ];
   }
+
+  assembleLeadSummaryPrompt(
+    config: IndustryConfig,
+    extractedData: { fieldKey: string; fieldValue: string | null }[]
+  ): LLMMessage[] {
+    const dataContext = extractedData
+      .filter(d => d.fieldValue !== null)
+      .map(d => `${d.fieldKey}: ${d.fieldValue}`)
+      .join('\n');
+
+    const systemContent = `Generate ONE single sentence summarizing this lead.
+Maximum 20 words. No bullet points. No line breaks.
+Format: "[Contact type] inquiry from [location/context], [key detail], timeline [timeline]."
+Example: "Residential move from New York to London, full household goods, timeline March 2026."
+
+Return ONLY the summary sentence. Nothing else.
+
+Extracted Data:
+${dataContext}`;
+
+    return [
+      {
+        role: 'user',
+        content: systemContent,
+      }
+    ];
+  }
 }

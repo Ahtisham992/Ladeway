@@ -356,3 +356,27 @@ Phase 11 is fully implemented! Ladeway can now autonomously extract structured J
 ## Next Steps
 
 With the data extraction layer functional, we are almost at the end of Stage 2. We are now ready to proceed to the final step of this stage: **Phase 12: Lead Scoring Engine & Lead Creation**!
+
+# Phase 12 Complete — Lead Scoring Engine & Lead Creation
+
+Phase 12 is fully implemented! Every completed or abandoned (partial) conversation now produces a scored, tiered, and summarized `Lead` record in the database.
+
+## What was built
+
+### 1. Dynamic Scoring Engine
+- Created `ScoringService` in the `QualificationModule`.
+- Implemented `score(rules, extractedData)` which dynamically evaluates rules (`equals`, `greater_than`, `less_than`, `in`, `present`) directly from the JSON `IndustryConfig` against the LLM-extracted data points.
+- **Dynamic Tiering**: The scoring engine successfully handles fixed tier overrides (e.g., if a customer is moving ASAP, they are immediately flagged as `HOT`), and gracefully falls back to dynamic scoring weights to assign the appropriate lead tier (`HOT`, `WARM`, `COLD`) if no override matches.
+
+### 2. Lead Module & Single-Sentence AI Summary
+- Created the new `LeadModule` and `LeadService`.
+- **Contact Info Extraction**: Added flexible logic to extract common identifying keys (`name`, `email`, `phone`) directly from the ExtractedData array without strictly requiring exact key names.
+- **LLM Summary Generation**: Updated the `PromptService` with an extremely strict prompt restricting Llama 3 to output a single, max 20-word sentence in a specific format (`[Contact type] inquiry from [location/context], [key detail], timeline [timeline].`), avoiding broken dashboard UI layouts.
+
+### 3. Asynchronous Triggers
+- **Conversation Service**: Hooked up lead creation inside `ConversationService`. The moment the conversation state hits `CLOSED` or `TRANSFERRED`, the `LeadService` is invoked asynchronously to calculate the score, fetch the AI summary, and persist the row.
+- **Abandonment Cron**: Also integrated into the `AbandonmentCronService` to ensure we capture Leads for abandoned conversations if they successfully captured at least 50% of the required data.
+
+## Next Steps
+
+With the Lead data correctly captured and scored, Stage 2 of Ladeway is officially fully complete! We are now ready to jump into Stage 3 (Frontend & Ops), starting with **Phase 13: Lead Management APIs**.

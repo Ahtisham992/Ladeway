@@ -6,6 +6,7 @@ import { PromptService } from '../ai/prompt.service';
 import { LLMRouterService } from '../ai/llm-router.service';
 import { QualificationEngineService } from '../qualification/qualification-engine.service';
 import { ExtractorService } from '../ai/extractor.service';
+import { LeadService } from '../lead/lead.service';
 import { StartConversationResponse } from './types/conversation.types';
 import { ConversationStatus } from '../session/types/session.types';
 import { QualificationAction } from '../qualification/types/qualification.types';
@@ -23,6 +24,7 @@ export class ConversationService {
     private readonly llmRouter: LLMRouterService,
     private readonly qualificationEngine: QualificationEngineService,
     private readonly extractor: ExtractorService,
+    private readonly leadService: LeadService,
   ) {}
 
   async startConversation(configId: string): Promise<StartConversationResponse> {
@@ -201,6 +203,11 @@ export class ConversationService {
           status: newStatus,
           completedAt: new Date(),
         },
+      });
+      
+      // Phase 12: Trigger Lead Creation asynchronously
+      this.leadService.createLeadFromConversation(session.conversationId).catch(err => {
+        this.logger.error(`Failed to create lead for conversation ${session.conversationId}`, err.stack);
       });
     }
 

@@ -6,6 +6,7 @@ import { SessionModule } from '../session/session.module';
 import { IndustryConfigModule } from '../industry-config/industry-config.module';
 import { AIModule } from '../ai/ai.module';
 import { QualificationModule } from '../qualification/qualification.module';
+import { LeadModule } from '../lead/lead.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { QualificationModule } from '../qualification/qualification.module';
     IndustryConfigModule,
     AIModule,
     QualificationModule,
+    LeadModule,
   ],
   controllers: [ConversationController],
   providers: [ConversationService],

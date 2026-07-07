@@ -16,9 +16,6 @@
     "noImplicitAny": true,
     "strictBindCallApply": true,
     "forceConsistentCasingInFileNames": true,
-    "noFallthroughCasesInSwitch": true,
-    "paths": {
-      "@ladeway/types": ["../../packages/types/src"]
-    }
+    "noFallthroughCasesInSwitch": true
   }
 }

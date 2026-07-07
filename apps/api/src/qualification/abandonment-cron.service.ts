@@ -4,6 +4,7 @@ import { PrismaService } from '../database/prisma.service';
 import { SessionService } from '../session/session.service';
 import { ConversationStatus } from '../session/types/session.types';
 import { ExtractorService } from '../ai/extractor.service';
+import { LeadService } from '../lead/lead.service';
 
 @Injectable()
 export class AbandonmentCronService {
@@ -13,6 +14,7 @@ export class AbandonmentCronService {
     private readonly prisma: PrismaService,
     private readonly sessionService: SessionService,
     private readonly extractor: ExtractorService,
+    private readonly leadService: LeadService,
   ) {}
 
   /**
@@ -101,6 +103,12 @@ export class AbandonmentCronService {
 
           if (newExtractedData.length > 0) {
             await this.prisma.extractedData.createMany({ data: newExtractedData });
+          }
+          
+          try {
+            await this.leadService.createLeadFromConversation(conv.id);
+          } catch (err: any) {
+            this.logger.error(`Failed to create lead for abandoned conversation ${conv.id}`, err.stack);
           }
         }
       }

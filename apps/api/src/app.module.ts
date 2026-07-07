@@ -28,6 +28,7 @@ import { SessionModule } from './session/session.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { QualificationModule } from './qualification/qualification.module';
 import { ConversationModule } from './conversation/conversation.module';
+import { LeadModule } from './lead/lead.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { ConversationModule } from './conversation/conversation.module';
     ScheduleModule.forRoot(),
     QualificationModule,
     ConversationModule,
+    LeadModule,
   ],
   controllers: [HealthController],
   providers: [],
