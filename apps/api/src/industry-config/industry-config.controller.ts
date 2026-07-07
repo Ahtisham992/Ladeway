@@ -8,7 +8,6 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { LLMRouterService } from '../ai/llm-router.service';
 
 @Controller('industry-configs')
-@UseGuards(JwtAuthGuard, RolesGuard)
 export class IndustryConfigController {
   constructor(
     private readonly industryConfigService: IndustryConfigService,
@@ -16,6 +15,7 @@ export class IndustryConfigController {
   ) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   @UsePipes(new ZodValidationPipe(CreateIndustryConfigDtoSchema))
   create(@Body() createDto: CreateIndustryConfigDto) {
@@ -23,18 +23,26 @@ export class IndustryConfigController {
   }
 
   @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'REP')
   findAll() {
     return this.industryConfigService.findAll();
   }
 
+  @Get('public')
+  async getPublicConfigs() {
+    return this.industryConfigService.getPublicConfigs();
+  }
+
   @Get(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'REP')
   findOne(@Param('id') id: string) {
     return this.industryConfigService.findOne(id);
   }
 
   @Put(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   update(
     @Param('id') id: string,
@@ -44,6 +52,7 @@ export class IndustryConfigController {
   }
 
   @Patch(':id/status')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   async updateStatus(
     @Param('id') id: string,
@@ -53,12 +62,14 @@ export class IndustryConfigController {
   }
 
   @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   remove(@Param('id') id: string) {
     return this.industryConfigService.remove(id);
   }
 
   @Get(':id/preview')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   async preview(@Param('id') id: string, @Query('message') message?: string) {
     const config = await this.industryConfigService.findOne(id);

@@ -583,3 +583,18 @@ Phase 16 hardened the IndustryConfig APIs to ensure they are production-ready fo
 **Verification**: Ran `npm run type-check` strictly verifying the entire React TS codebase cleanly compiles.
 
 Moving directly to **Phase 19 (Chat Widget Component)** as requested next.
+
+---
+
+## Phase 19: Chat Widget Component
+
+**Goal**: Build a production-quality, professionally designed customer-facing chat interface that consumes the NestJS SSE streaming endpoint reliably.
+
+**Implementation Highlights**:
+1. **Public Endpoint for Configs**: Added `GET /industry-configs/public` in the NestJS backend to allow the frontend to fetch available config records seamlessly without needing an admin JWT.
+2. **Widget Layout & Components**: Developed `ChatWidget.tsx`, `MessageBubble.tsx`, and `TypingIndicator.tsx`. Clean, minimal layout respecting the specification (no avatars/emojis, strictly utilizing `primary` navy for users and `secondary-50` for AI). Mobile responsiveness guaranteed with a 375px min-width wrapper and 44px minimum touch targets on the inputs/buttons.
+3. **SSE Streaming (Fetch API)**: Implemented robust stream consumption via `response.body.getReader()`. Built a line buffer paired with `TextDecoder({ stream: true })` to prevent JSON parsing crashes on chunk boundaries.
+4. **Seamless Typing Indicator**: A subtle, bouncing 3-dot animation is displayed inside a placeholder `MessageBubble` immediately when an AI response starts in-flight, which gracefully is swapped with actual markdown tokens as soon as `event: token` pushes chunks, removing any visual flash.
+5. **Auto-Scroll & Session State**: Handled scrolling seamlessly using a `useRef` sentinel div pointing to the bottom of the message array. Handled component locks around streaming events (`done` to re-enable, `error` for inline alerts).
+
+**Verification**: `npm run type-check` compiles perfectly. The SSE parser cleanly matches all requirements.

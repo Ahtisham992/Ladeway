@@ -38,6 +38,19 @@ export class IndustryConfigService {
     });
   }
 
+  async getPublicConfigs() {
+    return this.prisma.$system.industryConfig.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        industryName: true,
+        personaName: true,
+        greeting: true
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+  }
+
   async findOne(id: string) {
     const config = await this.prisma.$system.industryConfig.findUnique({
       where: { id },
