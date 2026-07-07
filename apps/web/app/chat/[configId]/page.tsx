@@ -12,6 +12,7 @@ export default function ChatPage() {
   const configId = params.configId as string
 
   const {
+    conversationId,
     sessionToken,
     initialMessages,
     isLoading,
@@ -43,7 +44,7 @@ export default function ChatPage() {
     )
   }
 
-  if (!sessionToken) {
+  if (!sessionToken || !conversationId) {
     return null
   }
 
@@ -69,6 +70,7 @@ export default function ChatPage() {
         </header>
         <div className="flex-1 overflow-hidden relative">
           <ChatWidget 
+            conversationId={conversationId}
             sessionToken={sessionToken} 
             initialMessages={initialMessages} 
             onSessionExpired={reset}

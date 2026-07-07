@@ -9,6 +9,7 @@ import { MessageBubble, type MessageProps } from "./MessageBubble"
 import { cn } from "@/lib/utils"
 
 export interface ChatWidgetProps {
+  conversationId: string
   sessionToken: string
   initialMessages: MessageProps[]
   onComplete?: () => void
@@ -16,7 +17,7 @@ export interface ChatWidgetProps {
   className?: string
 }
 
-export function ChatWidget({ sessionToken, initialMessages, onComplete, onSessionExpired, className }: ChatWidgetProps) {
+export function ChatWidget({ conversationId, sessionToken, initialMessages, onComplete, onSessionExpired, className }: ChatWidgetProps) {
   const [messages, setMessages] = useState<MessageProps[]>(initialMessages)
   const [inputValue, setInputValue] = useState("")
   const [isStreaming, setIsStreaming] = useState(false)
@@ -47,13 +48,13 @@ export function ChatWidget({ sessionToken, initialMessages, onComplete, onSessio
     setIsStreaming(true)
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/conversations/message`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/conversations/${conversationId}/message`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${sessionToken}`,
         },
-        body: JSON.stringify({ message: userMessage }),
+        body: JSON.stringify({ sessionToken, message: userMessage }),
       })
 
       if (!response.ok) {
@@ -94,7 +95,11 @@ export function ChatWidget({ sessionToken, initialMessages, onComplete, onSessio
                 // Append to current AI message
                 setMessages((prev) => {
                   const updated = [...prev]
-                  updated[updated.length - 1].content += data.content
+                  const lastIdx = updated.length - 1
+                  updated[lastIdx] = {
+                    ...updated[lastIdx],
+                    content: updated[lastIdx].content + data.content
+                  }
                   return updated
                 })
               }

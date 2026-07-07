@@ -1152,3 +1152,40 @@ Passes the active `sessionToken` and `initialMessages` into the `<ChatWidget>`.
 1. Navigate to `/chat/<valid-config-id>`. Verify a new conversation is created in the DB and the greeting is immediately displayed.
 2. Hard-refresh the page (F5). Verify the conversation is fully restored and no duplicate conversation is created.
 3. Manually delete the conversation from the DB (simulating an expiry) or wait for expiry, then refresh. Verify the application gracefully resets and starts a fresh conversation seamlessly.
+
+
+
+# Phase 21 Goal Description
+
+Phase 21 focuses on building the primary **Multi-Industry Demo Landing Page** (`apps/web/app/page.tsx`). Since this is the very first thing Neal (or any evaluator) will see when testing the application, it needs to immediately demonstrate the premium design system we built in Phase 18 and cleanly offer the dual industry demonstrations. 
+
+## User Review Required
+
+The specification explicitly states we must showcase two industries side by side (e.g., Logistics and Real Estate) without hardcoding their configuration IDs. We previously built `GET /industry-configs/public` to fetch the available configs dynamically. 
+
+If there are more than two active configurations returned from the API, we can either display all of them as a grid of cards, or specifically slice/filter for just the first two.
+
+> [!IMPORTANT]
+> **Open Question:** Should the landing page dynamically render a card for *every* active config returned from the API (a grid layout), or do you want to hardcode the layout to strictly expect and display exactly two sections regardless of how many configs exist? (I recommend rendering a dynamic grid so it scales automatically if you add a third demo later).
+
+## Proposed Changes
+
+### UI Components (`apps/web/app/`)
+#### [NEW] [page.tsx](file:///d:/logistics/apps/web/app/page.tsx)
+- **Data Fetching:** Implemented as a **Server Component**. We will use `fetch(\`\${process.env.API_URL}/industry-configs/public\`, { cache: 'no-store' })` to securely fetch the active `configIds` before rendering. (Using `no-store` ensures the demo page always reflects the latest backend database state).
+- **Layout Structure:**
+  - **Hero Section:** A visually polished header with a strong headline and subheadline matching the Deep Navy (`#1F4E79`) and Slate (`#64748B`) typography.
+  - **Grid / Demo Sections:** We will iterate over the fetched configs and use the `Card` component to display each industry's use case.
+  - **Card Content:** Each card will display the `industryName` (e.g., "Logistics Services"), the `personaName` & `greeting` context, and a clear `Button` linking to `/chat/[configId]`.
+- **Loading / Error States:** If the fetch fails or no configs exist, we'll display a clean fallback UI instructing the evaluator to run the database seed script.
+
+## Verification Plan
+
+### Automated Tests
+- Run `npm run type-check` across the frontend repository to ensure strict typing.
+
+### Manual Verification
+1. Navigate to the root URL `/`.
+2. Confirm the page loads instantly (Server Component) and correctly displays cards for the seeded configs.
+3. Verify the "Start Conversation" button correctly links to `/chat/<actual-config-id>`.
+4. Run the E2E script `test-config-crud.ts` to add a new config, refresh the landing page, and verify the new card automatically appears in the UI.
