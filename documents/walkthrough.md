@@ -495,3 +495,22 @@ Phase 13 focuses on proving that the Qualification Engine is truly **industry-ag
 6. **Multi-Industry Proof Document**: Created `multi-industry-proof.md` highlighting the results. The engine successfully extracted dynamic data points and closed the qualification loop for Logistics, Real Estate, and Legal Services dynamically.
 
 The system is fully proven to handle arbitrary verticals through Database Configuration only! All tests are passing, and code is successfully pushed and merged to `main`.
+
+# Phase 14: Conversation Resilience & State Recovery
+
+Phase 14 ensures that Ladeway gracefully handles system failures, AI downtime, and user abandonment without losing critical data.
+
+### 1. Redis TTL Expiry Recovery
+- **Issue fixed:** Sessions expiring in Redis after 24 hours or server restarts caused lost context.
+- **Solution:** `ConversationService` now detects when a session is missing from Redis and dynamically reconstructs the `ConversationSession` object from the PostgreSQL `Message` history. It re-derives captured and missing fields, restores the correct `turnCount` based on the message array length, and saves the session back to Redis.
+- **Result:** Users can resume an active conversation days later without the AI losing context. Verified with `test-recovery.ts`.
+
+### 2. Abandonment Graceful Degradation
+- **Issue fixed:** The `AbandonmentCronService` used to delete the Redis session *before* extracting partial fields, leading to extraction failure.
+- **Solution:** Reordered the logic to perform extraction first. We also introduced the `[PARTIAL]` flag. If an abandoned conversation has at least 50% of the required fields captured, the system creates a Lead marked as `ABANDONED` with a `[PARTIAL]` summary, ensuring valuable data is not lost. We also fixed an RLS context issue in the cron job by utilizing the `$system` client.
+- **Result:** Partial leads are now successfully generated. Verified with `test-abandonment.ts`.
+
+### 3. AI Error Handling
+- **Issue fixed:** An error during the LLM streaming call could leave the conversation broken or cause server crashes.
+- **Solution:** Wrapped the LLM invocation in a try/catch block. If an AI exception occurs, it yields an `event: error` over the SSE stream, notifying the client. Crucially, the system leaves the conversation state untouched (`QUALIFYING`) so the user can simply retry their message.
+- **Result:** Graceful failure on AI service unavailability. Verified with `test-ai-error.ts`.
