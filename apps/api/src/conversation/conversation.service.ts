@@ -30,6 +30,10 @@ export class ConversationService {
   async startConversation(configId: string): Promise<StartConversationResponse> {
     const config = await this.configService.getActiveConfig(configId) as any;
     
+    if (!config || !config.isActive) {
+      throw new NotFoundException('Configuration not found or inactive');
+    }
+    
     const fieldsJson = config.fieldsJson as any[];
     const missingFields = fieldsJson
       .filter(f => f.required)
@@ -64,6 +68,10 @@ export class ConversationService {
       missingFields,
       status: ConversationStatus.QUALIFYING,
       turnCount: 1,
+      configSnapshot: {
+        fieldsJson: config.fieldsJson,
+        scoringRulesJson: config.scoringRulesJson
+      }
     });
 
     // Persist the AI greeting
@@ -93,6 +101,11 @@ export class ConversationService {
     }
 
     const config = await this.configService.getActiveConfig(session.configId) as any;
+    
+    if (session.configSnapshot) {
+      config.fieldsJson = session.configSnapshot.fieldsJson;
+      config.scoringRulesJson = session.configSnapshot.scoringRulesJson;
+    }
 
     // Persist user message
     await this.prisma.$system.message.create({

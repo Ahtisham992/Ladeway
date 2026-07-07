@@ -531,3 +531,24 @@ Phase 15 introduces the ability for users to gracefully escalate the conversatio
 - **Implementation:** Upon intercepting a transfer request, the conversation transitions immediately to `TRANSFERRED`. The `ExtractorService` then runs in the background to glean any data provided prior to escalation.
 - **Lead Hand-off:** A Lead record is created asynchronously with a dedicated `status` of `TRANSFERRED`, allowing sales representatives to easily identify and prioritize escalated users in the dashboard.
 - **Verification:** `test-escalation.ts` successfully ran an end-to-end flow demonstrating immediate transfer and lead creation from a frustrated user.
+
+# Phase 16: Config CRUD Hardening
+
+Phase 16 hardened the IndustryConfig APIs to ensure they are production-ready for the admin dashboard. We introduced versioning and snapshotting to ensure complete historical integrity of past conversations.
+
+### 1. Config Versioning & Updates (Immutability)
+- **Implementation:** Refactored `PUT /configs/:id` so that updating structural elements (`fieldsJson` or `scoringRulesJson`) no longer mutates the existing row. Instead, the current config is deactivated (`isActive: false`) and a new config row is created, effectively acting as a version bump.
+- **In-place Updates:** Superficial changes (like `personaName` or `greeting`) still update in place to prevent unnecessary database bloat.
+- **Return Value:** The API now returns `{ id, versioned: boolean }` so clients know if the ID changed.
+
+### 2. Session Config Snapshotting
+- **Implementation:** `ConversationService.startConversation` now takes a snapshot of the active `fieldsJson` and `scoringRulesJson` and stores it directly inside the Redis `ConversationSession`.
+- **Result:** If an administrator bumps the version of a config while a user is mid-conversation, the user's active session is completely immunized. The extraction engine and LLM prompts read strictly from the frozen session snapshot, guaranteeing consistency.
+
+### 3. Deletion Guards & Deactivation
+- **Implementation:** Added a rigid guard to `DELETE /configs/:id` that checks for any linked conversations. If found, it returns a `409 Conflict`, enforcing the rule that used configs can only be deactivated, never deleted.
+- **Status Toggle:** Added `PATCH /configs/:id/status` to easily deactivate a config without a full update payload. `POST /conversations/start` correctly rejects deactivated configs with a `404`.
+
+### 4. Zero-Record Preview Endpoint
+- **Implementation:** Added `GET /configs/:id/preview?message=...` to allow administrators to simulate a one-turn conversation with the configured persona.
+- **Verification:** It successfully returns the generated LLM response dynamically based on the requested tone/persona without creating *any* junk records in the PostgreSQL database. Verified via `test-config-crud.ts`.

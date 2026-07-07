@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, UseGuards, UsePipes } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Put, Patch, Delete, UseGuards, UsePipes, Query } from '@nestjs/common';
 import { IndustryConfigService } from './industry-config.service';
 import { CreateIndustryConfigDto, CreateIndustryConfigDtoSchema, UpdateIndustryConfigDto, UpdateIndustryConfigDtoSchema } from './schemas/config.schema';
 import { ZodValidationPipe } from './zod.pipe';
@@ -43,6 +43,15 @@ export class IndustryConfigController {
     return this.industryConfigService.update(id, updateDto);
   }
 
+  @Patch(':id/status')
+  @Roles('ADMIN')
+  async updateStatus(
+    @Param('id') id: string,
+    @Body('isActive') isActive: boolean,
+  ) {
+    return this.industryConfigService.updateStatus(id, isActive);
+  }
+
   @Delete(':id')
   @Roles('ADMIN')
   remove(@Param('id') id: string) {
@@ -51,24 +60,28 @@ export class IndustryConfigController {
 
   @Get(':id/preview')
   @Roles('ADMIN')
-  async preview(@Param('id') id: string) {
-    // 1. Load the config
+  async preview(@Param('id') id: string, @Query('message') message?: string) {
     const config = await this.industryConfigService.findOne(id);
+    const userMessage = message || 'Hello';
 
-    // 2. We can inject the config parameters into the system prompt here if needed.
-    // For the preview, we'll just test the LLM router as requested with a system prompt and user message.
     const messages: any[] = [
-      { role: 'system', content: `You are a ${config.personaRole} named ${config.personaName} for ${config.industryName}. Your tone is ${config.tone}. Greet the user with: "${config.greeting}"` },
-      { role: 'user', content: "Hello, I'm interested in your services" }
+      { 
+        role: 'system', 
+        content: `You are a ${config.personaRole} named ${config.personaName} for ${config.industryName}. Your tone is ${config.tone}. ` +
+                 `The user is testing your configuration. Answer their message appropriately based on your persona.`
+      },
+      { role: 'user', content: userMessage }
     ];
 
-    // 3. Call LLMRouterService.stream() with a single test message
     let fullResponse = '';
     for await (const token of this.llmRouter.stream(messages)) {
       fullResponse += token;
     }
 
-    // 4. Return as a single JSON response
-    return { response: fullResponse };
+    return { 
+      response: fullResponse,
+      configId: config.id,
+      personaName: config.personaName
+    };
   }
 }

@@ -921,3 +921,49 @@ We will create a new E2E test script that simulates:
 > [!WARNING]  
 > **LLM Classifier Latency**  
 > Running an intent classification prompt before the conversational prompt adds a blocking network call to the critical path. Are you comfortable with an extra ~300ms latency for messages that trigger the classifier, or should we strictly stick to keyword-based detection with a vastly expanded dictionary?
+
+
+
+# Phase 16 — Config CRUD Hardening
+
+This phase focuses on making the `IndustryConfig` API production-ready. We must ensure that configuration data can be safely managed without breaking historical conversation records or losing context for active sessions.
+
+## Goal
+The industry config API must be robust, handle all edge cases securely, and allow full management (versioning, deactivation, deletion prevention) via the API as a prerequisite for the dashboard in Phase 25.
+
+## Proposed Changes
+
+### 1. Hardening Delete Operations
+Currently, the `IndustryConfig` model is related to `Conversation` via a foreign key (`configId`). Because we deliberately omitted `onDelete: Cascade`, attempting to delete an active config will throw a Prisma constraint error.
+- **Action**: Update the `DELETE /configs/:id` endpoint to explicitly handle this. Before attempting deletion, we will query `conversationCount`. 
+- If `conversationCount > 0`, we will reject the deletion with a `409 Conflict` and return a user-friendly message explaining that the config can only be deactivated, not deleted.
+
+### 2. Implementing Versioning & Updates (Immutability)
+Modifying an existing configuration (e.g. changing fields or scoring rules) could retroactively break the context of historical conversations that referenced that exact schema.
+- **Action**: We will modify `PUT /configs/:id` so that updating a configuration is treated as a **version bump**.
+- Instead of mutating the row, we will set `isActive: false` on the old `IndustryConfig`.
+- We will then create a brand new `IndustryConfig` row with the updated data and `isActive: true`.
+- New conversations will pick up the new active version, while old conversations will remain linked to the frozen snapshot.
+
+### 3. Implementing Config Deactivation
+- **Action**: Introduce a `PATCH /configs/:id/status` endpoint to explicitly toggle `isActive` without needing to submit a full PUT payload.
+- This allows administrators to safely halt new leads for a specific industry without destroying historical data.
+
+### 4. Config Preview Endpoint (`GET /configs/:id/preview`)
+- **Action**: Create a new endpoint that accepts a `configId` and a sample `message`. 
+- It will invoke the `LLMRouterService` using a simulated conversation context (no DB records created) and stream or return the AI's response.
+- This allows administrators to instantly test how changes to the persona or fields will affect the AI's conversational style before setting the config live.
+
+## Verification Plan
+
+### Automated Tests
+We will create a new integration test suite (`test-config-crud.ts`) that verifies:
+1. Attempting to delete a config with existing conversations yields a `409 Conflict`.
+2. Updating a config creates a new active row and deactivates the old one.
+3. The preview endpoint returns a valid AI response without creating any `Conversation`, `Message`, or `Lead` records in PostgreSQL.
+
+## Open Questions
+
+> [!NOTE]  
+> **Preview Endpoint Structure**  
+> Should the `/configs/:id/preview` endpoint be a streaming endpoint using SSE (similar to the real chat API), or a standard JSON endpoint that waits for the full text generation to simplify the frontend dashboard integration later?
