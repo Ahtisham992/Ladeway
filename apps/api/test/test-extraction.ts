@@ -1,70 +1,52 @@
+import 'dotenv/config';
+import { PrismaClient } from '@prisma/client';
+import { Pool } from 'pg';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../src/app.module';
 import { ExtractorService } from '../src/ai/extractor.service';
-import { IndustryConfig } from '@prisma/client';
 import { ConversationSession, ConversationStatus } from '../src/session/types/session.types';
 import { LLMMessage } from '../src/ai/prompt.service';
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 
 async function bootstrap() {
   const app = await NestFactory.createApplicationContext(AppModule);
   const extractorService = app.get(ExtractorService);
 
-  const mockConfig = {
-    id: 'mock-config-1',
-    tenantId: 'tenant-1',
-    industryName: 'Logistics / Moving',
-    personaName: 'Alexandra',
-    personaRole: 'Logistics Coordinator',
-    greeting: 'Hello, I am Alexandra.',
-    tone: 'professional',
-    isActive: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    scoringRulesJson: [],
-    fieldsJson: [
-      {
-        key: 'origin',
-        label: 'Origin City',
-        type: 'text',
-        required: true,
-        extractionHint: 'The city or location the customer is moving from',
-      },
-      {
-        key: 'destination',
-        label: 'Destination',
-        type: 'text',
-        required: true,
-        extractionHint: 'The city or country the customer is moving to',
-      },
-      {
-        key: 'timeline',
-        label: 'Timeline',
-        type: 'text',
-        required: true,
-        extractionHint: 'When the customer wants to move',
-      },
-    ]
-  } as unknown as IndustryConfig;
+  const config = await prisma.industryConfig.findFirst({
+    where: { industryName: 'Real Estate', isActive: true },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  if (!config) {
+    console.error('No config found!');
+    return;
+  }
 
   const mockSession: ConversationSession = {
     conversationId: 'conv-1',
-    configId: 'mock-config-1',
-    tenantId: 'tenant-1',
+    configId: config.id,
+    tenantId: config.tenantId,
     status: ConversationStatus.QUALIFYING,
     capturedFields: {},
-    missingFields: ['origin', 'destination', 'timeline'],
+    missingFields: (config.fieldsJson as any[]).map(f => f.key),
     turnCount: 2,
     lastActivityAt: new Date().toISOString(),
   };
 
   const mockMessages: LLMMessage[] = [
-    { role: 'assistant', content: 'Hello! I can help you with your move. Where are you moving from?' },
-    { role: 'user', content: 'Hi, I need to move from New York to London next month.' },
+    { role: 'assistant', content: 'Hello! I can help you find your next home. Are you looking to buy or rent?' },
+    { role: 'user', content: 'Hi, I want to rent a 3-bedroom house in London.' },
+    { role: 'assistant', content: 'What is your budget?' },
+    { role: 'user', content: 'My budget is around $3000 per month. I am looking to move in about two months. I have pre-approval ready. My name is John Doe, email is john@test.com, phone is 555-1234. That is everything.' }
   ];
 
   console.log('--- RUNNING EXTRACTION ---');
   try {
-    const result = await extractorService.extract(mockConfig, mockSession, mockMessages);
+    const result = await extractorService.extract(config, mockSession, mockMessages);
     console.log('EXTRACTION RESULT:');
     console.log(JSON.stringify(result, null, 2));
   } catch (err) {

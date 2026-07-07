@@ -803,3 +803,34 @@ Implement `LeadService`:
 ### Manual Verification
 - Complete a full test conversation via the `POST /conversations/:id/message` endpoint.
 - Verify in PostgreSQL that a `Lead` record is successfully created with a calculated score, assigned tier, and an LLM-generated plain-language summary.
+
+
+
+# Phase 13 Implementation Plan: Multi-Industry Demonstration
+
+The objective of Phase 13 is to concretely prove that the AI qualification pipeline works for entirely different industries without any engine code changes, driven purely by configuration records. 
+
+## Proposed Changes
+
+### `apps/api/prisma/seed.ts`
+- **[MODIFY] [seed.ts](file:///d:/logistics/apps/api/prisma/seed.ts)**
+  - Seed a third `IndustryConfig` (e.g., Legal Services - Personal Injury or Family Law).
+  - Add fields appropriate for this new industry (e.g., `case_type`, `incident_date`, `injury_severity`).
+  - Add specific scoring rules based on those fields.
+
+### `apps/api/test-e2e-all.ts`
+- **[NEW] [test-e2e-all.ts](file:///d:/logistics/apps/api/test-e2e-all.ts)**
+  - Consolidate our existing E2E scripts into a single parameterised integration test.
+  - The script will iterate through all active `IndustryConfig` records in the database.
+  - For each config, it will load a pre-defined set of simulated user messages that satisfy that specific industry's required fields.
+  - It will run the qualification conversation, wait for async lead creation, and verify the structured output.
+
+## Documentation
+- Create a `multi-industry-proof.md` artifact documenting the complete delta between configs and showcasing how the unified engine handles them correctly.
+
+## Verification Plan
+
+### Automated Tests
+- Run `npx ts-node prisma/seed.ts` to inject the new Legal config.
+- Run `npx ts-node test-e2e-all.ts` to simulate conversations across Logistics, Real Estate, and Legal.
+- Verify that each run produces a Status: `CLOSED` conversation, correct structured `ExtractedData`, and a successfully generated `Lead` record.
