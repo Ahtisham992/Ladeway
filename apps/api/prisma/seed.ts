@@ -156,7 +156,27 @@ async function main() {
           field: 'transaction_type',
           condition: 'equals',
           value: 'buy',
-          weight: 0.6,
+          weight: 0.2,
+        },
+        {
+          field: 'pre_approval',
+          condition: 'present',
+          weight: 0.4,
+        },
+        {
+          field: 'budget',
+          condition: 'present',
+          weight: 0.2,
+        },
+        {
+          field: 'purchase_timeline',
+          condition: 'present',
+          weight: 0.1,
+        },
+        {
+          field: 'location',
+          condition: 'present',
+          weight: 0.1,
         },
       ],
     },

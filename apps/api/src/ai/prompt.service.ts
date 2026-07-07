@@ -107,9 +107,10 @@ ${conversationContext}`;
       .map(d => `${d.fieldKey}: ${d.fieldValue}`)
       .join('\n');
 
-    const systemContent = `Generate ONE single sentence summarizing this lead.
+    const systemContent = `Generate ONE single sentence summarizing this lead based ONLY on the extracted data provided.
 Maximum 20 words. No bullet points. No line breaks.
-Format: "[Contact type] inquiry from [location/context], [key detail], timeline [timeline]."
+Combine the key details (e.g. type of inquiry, location, budget/cargo, timeline) into a natural flowing sentence. 
+Do not include fields that are missing or unknown. If a timeline is not provided, do not mention it.
 Example: "Residential move from New York to London, full household goods, timeline March 2026."
 
 Return ONLY the summary sentence. Nothing else.

@@ -380,3 +380,45 @@ Phase 12 is fully implemented! Every completed or abandoned (partial) conversati
 ## Next Steps
 
 With the Lead data correctly captured and scored, Stage 2 of Ladeway is officially fully complete! We are now ready to jump into Stage 3 (Frontend & Ops), starting with **Phase 13: Lead Management APIs**.
+
+
+# Phase 12 Walkthrough
+
+## What I accomplished
+1. **Fixed Qualification Engine State Machine Loop**:
+   - The engine was stuck in a state where an extraction trigger during the final turn caused `getNextAction` to trigger extraction again, instead of advancing to `CLOSE_CONVERSATION`.
+   - Moved the `missingFields.length === 0` check (Priority 3) to be evaluated *before* the even-turn extraction trigger (Priority 2) in `qualification-engine.service.ts`.
+2. **Fixed LLM Extraction Threshold Issue**:
+   - The AI would hallucinate or low-confidence match missing fields (e.g., matching "next month" with confidence `0.5`). 
+   - I updated the `conversation.service.ts` extraction flow so it only clears fields from `missingFields` if `confidence >= 0.6`.
+3. **Contact Information Universal Extraction**:
+   - We ensure universal capture by adding the contact keys (`name`, `email`, `phone`) as non-blocking `required: false` variables directly in our seed configs.
+   - We updated `extractor.service.ts` to statically search for those fields and extract them regardless of whether the state machine tracks them as "missing".
+4. **Tested E2E across Industries**:
+   - **Logistics E2E**: Successfully transitioned the conversation to `CLOSED` and asynchronously created a `HOT` tier lead.
+   - **Real Estate E2E**: Successfully gathered properties, budget, and timeline within two turns, closed the conversation, and asynchronously created a `COLD` tier lead for the rental.
+
+## Validation Results
+- Verified that **Conversation Table** transitions to `CLOSED`.
+- Verified that **ExtractedData Table** correctly captures structured records with confidences.
+- Verified that **Leads Table** successfully creates records asynchronously on the `conversation.closed` event with the correct Contact Info, Tier, Score, and 1-sentence LLM-generated summary.
+
+Next up, we are ready to move on to **Phase 13 (Lead Management APIs)** in Stage 3.
+
+# Groq API Integration & Real Estate Scoring Fixes
+
+## What I accomplished
+1. **Groq API Migration**:
+   - Replaced the local Ollama LLM provider with the Groq API for significantly lower latency and reliable generation.
+   - Integrated the official `groq-sdk` package in the backend API.
+   - Implemented streaming responses via Groq utilizing `llama-3.1-8b-instant`.
+2. **Fixed Real Estate Scoring Rules**:
+   - Updated the Real Estate seed data to handle varying fields like `budget`, `purchase_timeline`, `location`, and `pre_approval`.
+   - Used the `present` condition for these fields to award weights flexibly whenever the required data is captured.
+3. **Improved JSON Extraction & Lead Summarization**:
+   - Hardened `ExtractorService` to strictly parse only the `{...}` JSON substring from Groq's extraction response, ignoring any LLM conversational preambles.
+   - Refined `PromptService`'s lead summary generator to dynamically adapt to missing or differently named fields (e.g. omitting the timeline if uncaptured instead of outputting "timeline unknown").
+4. **Validation Results**:
+   - Verified that the `test-e2e-realestate.ts` test now flawlessly triggers extraction via Groq.
+   - Confirmed Lead creation correctly assigns the `HOT` tier (Score: `0.8`) with a clean, single-sentence summary.
+   - Organized all integration scripts (`test-e2e.ts`, `test-e2e-realestate.ts`, `test-extraction.ts`, etc.) into a dedicated `apps/api/test` directory.

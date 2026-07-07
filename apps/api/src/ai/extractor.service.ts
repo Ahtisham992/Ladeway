@@ -29,7 +29,7 @@ export class ExtractorService {
         response += chunk;
       }
 
-      this.logger.debug(`Raw LLM Extraction Output: ${response}`);
+      this.logger.warn(`Raw LLM Extraction Output: ${response}`);
       
       return this.parseAndValidate(response, config, session);
     } catch (error) {
@@ -43,17 +43,15 @@ export class ExtractorService {
   }
 
   private parseAndValidate(raw: string, config: IndustryConfig, session: ConversationSession): ExtractionResult {
-    let cleanStr = raw.trim();
-    // Strip markdown fences
-    if (cleanStr.startsWith('```json')) {
-      cleanStr = cleanStr.substring(7);
-    } else if (cleanStr.startsWith('```')) {
-      cleanStr = cleanStr.substring(3);
+    let cleanStr = raw;
+    
+    // Find the first { and last } to extract just the JSON object
+    const startIdx = cleanStr.indexOf('{');
+    const endIdx = cleanStr.lastIndexOf('}');
+    
+    if (startIdx !== -1 && endIdx !== -1 && endIdx >= startIdx) {
+      cleanStr = cleanStr.substring(startIdx, endIdx + 1);
     }
-    if (cleanStr.endsWith('```')) {
-      cleanStr = cleanStr.substring(0, cleanStr.length - 3);
-    }
-    cleanStr = cleanStr.trim();
 
     const parsed = JSON.parse(cleanStr);
     const result: ExtractionResult = {};

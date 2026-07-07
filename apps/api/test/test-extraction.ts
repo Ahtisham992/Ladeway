@@ -1,9 +1,9 @@
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './src/app.module';
-import { ExtractorService } from './src/ai/extractor.service';
+import { AppModule } from '../src/app.module';
+import { ExtractorService } from '../src/ai/extractor.service';
 import { IndustryConfig } from '@prisma/client';
-import { ConversationSession, ConversationStatus } from './src/session/types/session.types';
-import { LLMMessage } from './src/ai/prompt.service';
+import { ConversationSession, ConversationStatus } from '../src/session/types/session.types';
+import { LLMMessage } from '../src/ai/prompt.service';
 
 async function bootstrap() {
   const app = await NestFactory.createApplicationContext(AppModule);

@@ -1,6 +1,6 @@
 import 'dotenv/config';
-import { PrismaService } from './src/database/prisma.service';
-import { tenantContext } from './src/tenant/tenant.context';
+import { PrismaService } from '../src/database/prisma.service';
+import { tenantContext } from '../src/tenant/tenant.context';
 import * as assert from 'assert';
 
 async function run() {
