@@ -55,35 +55,33 @@ If all required fields are collected, gracefully inform the user that you have e
   ): LLMMessage[] {
     const fieldsJson = config.fieldsJson as any[];
     
-    // Create instructions mapping missing fields to their extraction hints
     const missingFieldsMap = fieldsJson
       .filter(f => session.missingFields.includes(f.key))
-      .map(f => `"${f.key}": ${f.extractionHint}`)
-      .join('\n  ');
+      .map(f => `"${f.key}": ${f.label} — hint: ${f.extractionHint}`)
+      .join('\n');
 
     const conversationContext = recentMessages
       .map(m => `${m.role.toUpperCase()}: ${m.content}`)
       .join('\n');
 
-    const systemContent = `Analyze the following conversation snippet and extract any newly provided structured data.
+    const systemContent = `Analyze this conversation and extract the following fields.
 
-Fields to look for based on what is currently missing:
+REQUIRED OUTPUT FORMAT — follow exactly:
 {
-  ${missingFieldsMap}
+  "field_key": { "value": "extracted value or null", "confidence": 0.0-1.0 },
+  "another_field": { "value": null, "confidence": 0 }
 }
 
-CRITICAL: Your response must be ONLY a valid JSON object.
-No explanation. No markdown code fences. No preamble.
-Start your response with { and end with }.
+RULES:
+- Return ONLY the JSON object. No explanation. No markdown. No code fences.
+- Start with { and end with }
+- Return null value with confidence 0 if a field was not mentioned
+- Confidence guide: 0.9+ = explicitly stated, 0.7 = clearly implied, 0.5 = uncertain
 
-If a field was not mentioned in the conversation, return null for that field.
+FIELDS TO EXTRACT:
+${missingFieldsMap}
 
-Example output format:
-{
-  "field_key": "extracted_value"
-}
-
-Conversation Snippet:
+CONVERSATION:
 ${conversationContext}`;
 
     return [

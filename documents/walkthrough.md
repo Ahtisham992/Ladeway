@@ -315,3 +315,44 @@ Added a new `updateSession` method to support bulk updates in a single Redis rou
 
 With the API layer functional, the missing link in our state machine is the structured data extraction. 
 We can now proceed to **Phase 11: Structured Data Extractor**, where we'll fulfill the placeholder in the service to parse out structured data points in the background!
+
+
+
+# Phase 11 Complete — Structured Data Extractor
+
+Phase 11 is fully implemented! Ladeway can now autonomously extract structured JSON intel from unstructured conversation transcripts, validate the confidence of the fields, and persist them natively in Postgres.
+
+## What was built
+
+### 1. Robust Extractor Service
+- Implemented `ExtractorService` inside the `AIModule` to handle data extraction.
+- **Resilient JSON Parsing**: Built a fallback mechanism that strips out markdown fences (e.g. ` ```json `) safely. 
+- **Confidence Scoring Fallback**: Handled cases where the LLM might return a flat string instead of the nested `{ value, confidence }` object, gracefully defaulting the confidence to `0.8` ("extracted but unverified") as requested.
+
+### 2. Hardened Extraction Prompts
+- Updated `assembleExtractionPrompt` inside `PromptService` with an extremely explicit output schema and rule set.
+- Ensured the LLM returns `null` with confidence `0` for unmentioned fields, and assigns accurate confidence scores (`0.9+` = explicit, `0.7` = implied, `0.5` = uncertain) to successfully extracted values.
+
+### 3. Integrated State Wiring
+- **`ConversationService` Integration**: Replaced the Phase 11 placeholder inside the main conversation loop. After the LLM streaming response finishes, if `QualificationEngine` triggers `TRIGGER_EXTRACTION`:
+  - `ExtractorService` processes the conversation history.
+  - Newly acquired fields are injected securely into the `ExtractedData` Postgres table.
+  - The Redis session `capturedFields` and `missingFields` are properly reconciled.
+  - Most critically, the session state is freshly reloaded and `getNextAction` is re-evaluated immediately, guaranteeing the conversation gracefully closes out if all fields were satisfied on that exact turn.
+- **`AbandonmentCronService` Integration**: Wired the cron to trigger partial extractions for abandoned sessions if the user completed at least 50% of the required qualification fields.
+
+### 4. End-to-End Verification
+- Wrote and executed an automated end-to-end extraction script against a mock Logistics conversation.
+- The local inference ran flawlessly, correctly parsing the fields:
+  ```json
+  {
+    "origin": { "value": "New York", "confidence": 1 },
+    "destination": { "value": "London", "confidence": 1 },
+    "timeline": { "value": "next month", "confidence": 1 }
+  }
+  ```
+- Implemented and passed strict Jest unit tests (`extractor.service.spec.ts`) validating the custom parsing fallback mechanisms.
+
+## Next Steps
+
+With the data extraction layer functional, we are almost at the end of Stage 2. We are now ready to proceed to the final step of this stage: **Phase 12: Lead Scoring Engine & Lead Creation**!
