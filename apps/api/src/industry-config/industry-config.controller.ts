@@ -6,12 +6,15 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { LLMRouterService } from '../ai/llm-router.service';
+import { PromptService } from '../ai/prompt.service';
+import { ConversationSession } from '../session/types/session.types';
 
 @Controller('industry-configs')
 export class IndustryConfigController {
   constructor(
     private readonly industryConfigService: IndustryConfigService,
     private readonly llmRouter: LLMRouterService,
+    private readonly promptService: PromptService,
   ) {}
 
   @Post()
@@ -93,6 +96,35 @@ export class IndustryConfigController {
       response: fullResponse,
       configId: config.id,
       personaName: config.personaName
+    };
+  }
+
+  @Post('preview')
+  @UseGuards(JwtAuthGuard)
+  async previewDraft(@Body() draftConfig: any) {
+    const config = {
+      ...draftConfig,
+      fieldsJson: draftConfig.fieldsJson || [],
+    } as any;
+
+    const session: ConversationSession = {
+      conversationId: 'preview-session',
+      capturedFields: {},
+      missingFields: (config.fieldsJson as any[]).map(f => f.key),
+      turnCount: 0
+    };
+
+    const userMessage = 'Hello';
+    const messages = this.promptService.assembleConversationPrompt(config, session, [{ role: 'user', content: userMessage }]);
+
+    let fullResponse = '';
+    for await (const token of this.llmRouter.stream(messages)) {
+      fullResponse += token;
+    }
+
+    return { 
+      response: fullResponse,
+      personaName: config.personaName || 'AI Agent'
     };
   }
 }

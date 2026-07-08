@@ -1,0 +1,481 @@
+'use client';
+
+import { useReducer, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { z } from 'zod';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
+import { MessageBubble } from '../chat/MessageBubble';
+import { Plus, Trash2, Save, PlayCircle, Loader2 } from 'lucide-react';
+
+const QualificationFieldSchema = z.object({
+  key: z.string().min(1, 'Key required'),
+  label: z.string().min(1, 'Label required'),
+  type: z.enum(['string', 'boolean', 'enum', 'number']),
+  required: z.boolean(),
+  options: z.array(z.string()).optional(),
+  extractionHint: z.string().min(1, 'Hint required'),
+});
+
+const ScoringRuleSchema = z.object({
+  field: z.string().min(1, 'Field required'),
+  condition: z.enum(['equals', 'contains', 'greater_than', 'less_than', 'exists']),
+  value: z.any().optional(),
+  weight: z.number().min(0).max(1),
+});
+
+const ConfigFormSchema = z.object({
+  industryName: z.string().min(2, 'Industry name required'),
+  personaName: z.string().min(1, 'Persona name required'),
+  personaRole: z.string().min(1, 'Persona role required'),
+  greeting: z.string().min(10, 'Greeting must be at least 10 characters'),
+  tone: z.enum(['professional', 'friendly', 'formal']),
+  fieldsJson: z.array(QualificationFieldSchema).min(1, 'At least one field required'),
+  scoringRulesJson: z.array(ScoringRuleSchema),
+});
+
+type ConfigState = {
+  industryName: string;
+  personaName: string;
+  personaRole: string;
+  greeting: string;
+  tone: 'professional' | 'friendly' | 'formal';
+  fields: any[];
+  rules: any[];
+};
+
+type ConfigAction =
+  | { type: 'UPDATE_BASIC'; payload: Partial<ConfigState> }
+  | { type: 'ADD_FIELD' }
+  | { type: 'UPDATE_FIELD'; index: number; payload: Partial<any> }
+  | { type: 'REMOVE_FIELD'; index: number }
+  | { type: 'ADD_RULE' }
+  | { type: 'UPDATE_RULE'; index: number; payload: Partial<any> }
+  | { type: 'REMOVE_RULE'; index: number };
+
+function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
+  switch (action.type) {
+    case 'UPDATE_BASIC':
+      return { ...state, ...action.payload };
+    case 'ADD_FIELD':
+      return {
+        ...state,
+        fields: [...state.fields, { key: '', label: '', type: 'string', required: true, extractionHint: '' }]
+      };
+    case 'UPDATE_FIELD': {
+      const oldKey = state.fields[action.index].key;
+      const newKey = action.payload.key ?? oldKey;
+      return {
+        ...state,
+        fields: state.fields.map((f, i) => (i === action.index ? { ...f, ...action.payload } : f)),
+        rules: state.rules.map(r => (r.field === oldKey && oldKey !== '' ? { ...r, field: newKey } : r))
+      };
+    }
+    case 'REMOVE_FIELD':
+      return {
+        ...state,
+        fields: state.fields.filter((_, i) => i !== action.index)
+      };
+    case 'ADD_RULE':
+      return {
+        ...state,
+        rules: [...state.rules, { field: '', condition: 'equals', value: '', weight: 0.1 }]
+      };
+    case 'UPDATE_RULE':
+      return {
+        ...state,
+        rules: state.rules.map((r, i) => (i === action.index ? { ...r, ...action.payload } : r))
+      };
+    case 'REMOVE_RULE':
+      return {
+        ...state,
+        rules: state.rules.filter((_, i) => i !== action.index)
+      };
+    default:
+      return state;
+  }
+}
+
+export function ConfigEditor({ token, initialConfig }: { token: string; initialConfig: any | null }) {
+  const router = useRouter();
+  
+  const initialState: ConfigState = {
+    industryName: initialConfig?.industryName || '',
+    personaName: initialConfig?.personaName || '',
+    personaRole: initialConfig?.personaRole || '',
+    greeting: initialConfig?.greeting || '',
+    tone: initialConfig?.tone || 'professional',
+    fields: initialConfig?.fieldsJson || [],
+    rules: initialConfig?.scoringRulesJson || [],
+  };
+
+  const [state, dispatch] = useReducer(configReducer, initialState);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSaving, setIsSaving] = useState(false);
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [previewResponse, setPreviewResponse] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    // Validate
+    const payload = {
+      industryName: state.industryName,
+      personaName: state.personaName,
+      personaRole: state.personaRole,
+      greeting: state.greeting,
+      tone: state.tone,
+      fieldsJson: state.fields,
+      scoringRulesJson: state.rules,
+    };
+
+    const result = ConfigFormSchema.safeParse(payload);
+    if (!result.success) {
+      const newErrors: Record<string, string> = {};
+      result.error.errors.forEach(e => {
+        const path = e.path.join('.');
+        newErrors[path] = e.message;
+      });
+      setErrors(newErrors);
+      return;
+    }
+
+    setErrors({});
+    setIsSaving(true);
+
+    try {
+      const url = initialConfig 
+        ? `${process.env.NEXT_PUBLIC_API_URL}/industry-configs/${initialConfig.id}`
+        : `${process.env.NEXT_PUBLIC_API_URL}/industry-configs`;
+      const method = initialConfig ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.versioned) {
+          router.push(`/dashboard/configs/${data.id}`);
+          alert('Configuration updated — new version created');
+        } else {
+          router.push('/dashboard/configs');
+        }
+      } else {
+        const err = await res.json();
+        alert(err.message || 'Failed to save configuration');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Network error while saving');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handlePreview = async () => {
+    setIsPreviewing(true);
+    setPreviewResponse(null);
+    try {
+      const payload = {
+        industryName: state.industryName,
+        personaName: state.personaName,
+        personaRole: state.personaRole,
+        greeting: state.greeting,
+        tone: state.tone,
+        fieldsJson: state.fields,
+      };
+
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/industry-configs/preview`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setPreviewResponse(data.response);
+      } else {
+        setPreviewResponse('Failed to generate preview. Check your configuration.');
+      }
+    } catch (err) {
+      setPreviewResponse('Network error while generating preview.');
+    } finally {
+      setIsPreviewing(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6 pb-24">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+            {initialConfig ? `Edit Configuration (v${initialConfig.version})` : 'New Configuration'}
+          </h1>
+          <p className="text-slate-500 mt-1">Configure persona, qualification rules, and scoring logic.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button variant="outline" onClick={handlePreview} disabled={isPreviewing}>
+            {isPreviewing ? <Loader2 size={16} className="mr-2 animate-spin" /> : <PlayCircle size={16} className="mr-2" />}
+            Live Preview
+          </Button>
+          <Button onClick={handleSave} disabled={isSaving}>
+            {isSaving ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Save size={16} className="mr-2" />}
+            Save Configuration
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          {/* Section 1: Basic Details */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 dark:bg-slate-800 dark:border-slate-700">
+            <h2 className="text-lg font-semibold text-slate-900 mb-4 dark:text-white">Basic Details</h2>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <label className="block text-sm font-medium mb-1">Industry Name</label>
+                <Input 
+                  value={state.industryName} 
+                  onChange={e => dispatch({ type: 'UPDATE_BASIC', payload: { industryName: e.target.value } })}
+                  placeholder="e.g. Real Estate"
+                />
+                {errors['industryName'] && <p className="text-red-500 text-xs mt-1">{errors['industryName']}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Persona Name</label>
+                <Input 
+                  value={state.personaName} 
+                  onChange={e => dispatch({ type: 'UPDATE_BASIC', payload: { personaName: e.target.value } })}
+                  placeholder="e.g. Sarah"
+                />
+                {errors['personaName'] && <p className="text-red-500 text-xs mt-1">{errors['personaName']}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Persona Role</label>
+                <Input 
+                  value={state.personaRole} 
+                  onChange={e => dispatch({ type: 'UPDATE_BASIC', payload: { personaRole: e.target.value } })}
+                  placeholder="e.g. Senior Property Advisor"
+                />
+                {errors['personaRole'] && <p className="text-red-500 text-xs mt-1">{errors['personaRole']}</p>}
+              </div>
+              <div className="col-span-2">
+                <label className="block text-sm font-medium mb-1">Greeting Message</label>
+                <textarea 
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-slate-900 dark:border-slate-700"
+                  rows={2}
+                  value={state.greeting}
+                  onChange={e => dispatch({ type: 'UPDATE_BASIC', payload: { greeting: e.target.value } })}
+                  placeholder="e.g. Hello! I'm Sarah, a senior property advisor..."
+                />
+                {errors['greeting'] && <p className="text-red-500 text-xs mt-1">{errors['greeting']}</p>}
+              </div>
+              <div className="col-span-2">
+                <label className="block text-sm font-medium mb-1">Tone</label>
+                <Select 
+                  value={state.tone} 
+                  onChange={e => dispatch({ type: 'UPDATE_BASIC', payload: { tone: e.target.value as any } })}
+                >
+                  <option value="professional">Professional</option>
+                  <option value="friendly">Friendly</option>
+                  <option value="formal">Formal</option>
+                </Select>
+                {errors['tone'] && <p className="text-red-500 text-xs mt-1">{errors['tone']}</p>}
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Fields */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 dark:bg-slate-800 dark:border-slate-700">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Qualification Fields</h2>
+              <Button size="sm" variant="outline" onClick={() => dispatch({ type: 'ADD_FIELD' })}>
+                <Plus size={14} className="mr-1" /> Add Field
+              </Button>
+            </div>
+            {errors['fieldsJson'] && <p className="text-red-500 text-xs mb-4">{errors['fieldsJson']}</p>}
+            
+            <div className="space-y-4">
+              {state.fields.map((field, i) => (
+                <div key={i} className="p-4 border border-slate-200 rounded-lg bg-slate-50 dark:bg-slate-900/50 dark:border-slate-700 relative">
+                  <button 
+                    onClick={() => dispatch({ type: 'REMOVE_FIELD', index: i })}
+                    className="absolute top-4 right-4 text-slate-400 hover:text-red-500 transition-colors"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                  <div className="grid grid-cols-2 gap-4 pr-8">
+                    <div>
+                      <label className="block text-xs font-medium mb-1 text-slate-500">Field Key (JSON)</label>
+                      <Input 
+                        value={field.key} 
+                        onChange={e => dispatch({ type: 'UPDATE_FIELD', index: i, payload: { key: e.target.value } })}
+                        placeholder="e.g. property_type"
+                      />
+                      {errors[`fieldsJson.${i}.key`] && <p className="text-red-500 text-xs mt-1">{errors[`fieldsJson.${i}.key`]}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1 text-slate-500">Label (Display)</label>
+                      <Input 
+                        value={field.label} 
+                        onChange={e => dispatch({ type: 'UPDATE_FIELD', index: i, payload: { label: e.target.value } })}
+                        placeholder="e.g. Property Type"
+                      />
+                      {errors[`fieldsJson.${i}.label`] && <p className="text-red-500 text-xs mt-1">{errors[`fieldsJson.${i}.label`]}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1 text-slate-500">Type</label>
+                      <Select 
+                        value={field.type} 
+                        onChange={e => dispatch({ type: 'UPDATE_FIELD', index: i, payload: { type: e.target.value } })}
+                      >
+                        <option value="string">String</option>
+                        <option value="number">Number</option>
+                        <option value="boolean">Boolean</option>
+                        <option value="enum">Enum (Options)</option>
+                      </Select>
+                    </div>
+                    <div className="flex items-center pt-6">
+                      <label className="flex items-center gap-2 text-sm font-medium">
+                        <input 
+                          type="checkbox" 
+                          checked={field.required}
+                          onChange={e => dispatch({ type: 'UPDATE_FIELD', index: i, payload: { required: e.target.checked } })}
+                          className="rounded border-slate-300 text-primary focus:ring-primary"
+                        />
+                        Required for Qualification
+                      </label>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs font-medium mb-1 text-slate-500">Extraction Hint (Prompt injection)</label>
+                      <Input 
+                        value={field.extractionHint} 
+                        onChange={e => dispatch({ type: 'UPDATE_FIELD', index: i, payload: { extractionHint: e.target.value } })}
+                        placeholder="e.g. The type of property they want to buy"
+                      />
+                      {errors[`fieldsJson.${i}.extractionHint`] && <p className="text-red-500 text-xs mt-1">{errors[`fieldsJson.${i}.extractionHint`]}</p>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {state.fields.length === 0 && (
+                <p className="text-slate-500 text-sm text-center py-4">No fields added yet. Add a field to start collecting data.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Section 3: Scoring Rules */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 dark:bg-slate-800 dark:border-slate-700">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Scoring Rules</h2>
+              <Button size="sm" variant="outline" onClick={() => dispatch({ type: 'ADD_RULE' })}>
+                <Plus size={14} className="mr-1" /> Add Rule
+              </Button>
+            </div>
+            
+            <div className="space-y-4">
+              {state.rules.map((rule, i) => (
+                <div key={i} className="p-4 border border-slate-200 rounded-lg bg-slate-50 dark:bg-slate-900/50 dark:border-slate-700 relative">
+                  <button 
+                    onClick={() => dispatch({ type: 'REMOVE_RULE', index: i })}
+                    className="absolute top-4 right-4 text-slate-400 hover:text-red-500 transition-colors"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                  <div className="grid grid-cols-4 gap-4 pr-8">
+                    <div>
+                      <label className="block text-xs font-medium mb-1 text-slate-500">Field</label>
+                      <Select 
+                        value={rule.field} 
+                        onChange={e => dispatch({ type: 'UPDATE_RULE', index: i, payload: { field: e.target.value } })}
+                      >
+                        <option value="" disabled>Select field</option>
+                        {state.fields.map(f => (
+                          <option key={f.key} value={f.key}>{f.key}</option>
+                        ))}
+                      </Select>
+                      {errors[`scoringRulesJson.${i}.field`] && <p className="text-red-500 text-xs mt-1">{errors[`scoringRulesJson.${i}.field`]}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1 text-slate-500">Condition</label>
+                      <Select 
+                        value={rule.condition} 
+                        onChange={e => dispatch({ type: 'UPDATE_RULE', index: i, payload: { condition: e.target.value } })}
+                      >
+                        <option value="equals">Equals</option>
+                        <option value="contains">Contains</option>
+                        <option value="greater_than">Greater than</option>
+                        <option value="less_than">Less than</option>
+                        <option value="exists">Exists</option>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1 text-slate-500">Target Value</label>
+                      <Input 
+                        value={rule.value || ''} 
+                        onChange={e => dispatch({ type: 'UPDATE_RULE', index: i, payload: { value: e.target.value } })}
+                        placeholder="Value..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1 text-slate-500">Weight (0.0 - 1.0)</label>
+                      <Input 
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="1"
+                        value={rule.weight} 
+                        onChange={e => dispatch({ type: 'UPDATE_RULE', index: i, payload: { weight: parseFloat(e.target.value) } })}
+                      />
+                      {errors[`scoringRulesJson.${i}.weight`] && <p className="text-red-500 text-xs mt-1">{errors[`scoringRulesJson.${i}.weight`]}</p>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {state.rules.length === 0 && (
+                <p className="text-slate-500 text-sm text-center py-4">No scoring rules added. Leads will start at 0 score.</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Section 4: Live Preview Sidebar */}
+        <div className="lg:col-span-1">
+          <div className="sticky top-6 bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex flex-col h-[600px] dark:bg-slate-800 dark:border-slate-700">
+            <div className="p-4 border-b border-slate-100 bg-slate-50 dark:bg-slate-900/50 dark:border-slate-700">
+              <h3 className="font-semibold text-slate-900 flex items-center gap-2 dark:text-white">
+                <PlayCircle size={18} className="text-primary" />
+                Live Preview
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">Test your persona and greeting before saving.</p>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 bg-slate-50/50 dark:bg-slate-900/20">
+              {isPreviewing ? (
+                <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                  <Loader2 size={32} className="animate-spin mb-4 text-primary/50" />
+                  <p className="text-sm">Generating AI response...</p>
+                </div>
+              ) : previewResponse ? (
+                <div className="space-y-4">
+                  <MessageBubble message={{ id: 'preview-user', sender: 'user', content: 'Hello' }} />
+                  <MessageBubble message={{ id: 'preview-ai', sender: 'ai', content: previewResponse }} />
+                </div>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                  <p className="text-sm text-center px-6">Click "Live Preview" to test how the AI will greet users.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

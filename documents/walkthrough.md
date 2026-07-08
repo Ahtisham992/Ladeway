@@ -660,3 +660,24 @@ Moving directly to **Phase 19 (Chat Widget Component)** as requested next.
 - Log into the dashboard and verify the new Navy sidebar and active route highlighting.
 - Check the Leads table and verify it fetches and renders correctly.
 - Test changing a status inline and confirm the spinner appears and the backend successfully patches the record.
+
+
+# Phase 24: Lead Detail View
+
+**Goal**: A single, comprehensive screen where a rep can review the full AI conversation transcript, extracted structured data, and score rationale.
+
+**What was completed**:
+1. **Server Component Page**: Built `apps/web/app/dashboard/leads/[id]/page.tsx` as a Server component. It handles data fetching with `cache: 'no-store'` so reps always get the latest lead data from `GET /leads/:id`. Added an `ArrowLeft` Back to Leads button.
+2. **LeadDetailPanel**: Created a two-column client component layout.
+   - **Left Column**: Displays the Contact Info card, the Metrics Card (with the numerical Score, Tier Badge, and a derived `Strong/Moderate/Weak match` label), and the Extracted Data Grid.
+   - **Right Column**: Displays the full, chronological conversation transcript. Leveraged our existing `MessageBubble` component so it perfectly mirrors the UI of the public ChatWidget.
+3. **Data Formatting**: 
+   - Applied the `formatFieldKey` function to convert raw database keys (like `move_type`) into human-readable labels (`Move Type`).
+   - Implemented colored confidence dots using Tailwind `bg-green-500`, `bg-yellow-500`, `bg-slate-400`, and `bg-red-500`. Added a tooltip `"Low confidence — verify with customer"` to fields with `< 0.6` confidence.
+4. **Integration**: Wired up the Status dropdown to instantly patch the status back to the database. Updated the `LeadPipeline` table with a `View` button linking directly to this new page.
+
+**Verification**:
+- From the Dashboard, click **View** on any lead row.
+- Verify the Lead Detail View renders perfectly with the two-column layout.
+- Review the transcript on the right to ensure user messages are blue (right-aligned) and AI messages are gray (left-aligned).
+- Hover over the extracted data confidence dots to verify tooltips and color accuracy.

@@ -1281,3 +1281,81 @@ The goal of this phase is to build the core CRM interface for Sales Reps to view
 3. Verify the new lead automatically appears in the pipeline table within 30 seconds.
 4. Test filtering by `HOT` tier to ensure the table correctly isolates high-value leads.
 5. Change the lead's status to `CONTACTED` inline and verify the backend correctly persists the patch.
+
+
+
+# Phase 24: Lead Detail View
+
+The goal of this phase is to provide Sales Reps with a comprehensive, single-screen view of a lead, exposing all the context they need to successfully close the deal (including the full AI conversation transcript and extracted structured data).
+
+## User Review Required
+
+> [!NOTE]
+> 1. **Routing Strategy**: The Phase plan mentions `apps/web/app/dashboard/leads/[id]/page.tsx`, but your previous message mentioned a **"slide-over panel"** for the detail view. A slide-over panel (like a Shadcn UI Sheet or a fixed right-side panel) is usually better for CRM workflows than navigating away to a new page. Should I implement this as a Next.js parallel route/intercepted route modal, a standard separate page, or a client-side side-panel in the existing pipeline view?
+> 2. **Score Rationale**: The prompt mentions "brief rationale" for the score, but we currently only store the final numerical `score` and categorical `tier` on the `Lead` model, without the specific textual rationale string. I will add a simple badge for the tier and display the score number for now, but let me know if we need to modify the backend to save textual rule explanations.
+
+## Proposed Changes
+
+### 1. Frontend Detail View Component
+
+#### [NEW] `apps/web/components/admin/LeadDetailPanel.tsx`
+- Build a polished detail view component that accepts a `leadId` and fetches the full lead object via our recently created `GET /leads/:id` endpoint.
+- **Header Section**: Contact Name, Email, Phone, and the inline Status Update dropdown.
+- **Metrics Card**: High-visibility display of the `Tier` (Hot/Warm/Cold badge) and numerical `Score`.
+- **Extracted Data Grid**: A clean 2-column grid displaying all `fieldKey` and `fieldValue` pairs from the `ExtractedData` relation.
+- **Conversation Transcript**: A scrollable chat history mirroring the UI of the public ChatWidget. User messages right-aligned (blue), AI messages left-aligned (gray).
+
+### 2. Frontend Routing / Integration
+
+#### [MODIFY] `apps/web/app/dashboard/leads/[id]/page.tsx` OR `LeadPipeline.tsx`
+- Depending on the answer to Open Question #1, I will either build this as a dedicated full page at `/dashboard/leads/[id]` OR integrate it as a slide-over panel directly within the `LeadPipeline` component that opens when clicking a table row.
+
+## Verification Plan
+1. Start the dev server and navigate to the `/dashboard`.
+2. Click on an existing lead in the pipeline table.
+3. Verify that the detail view opens correctly and successfully fetches the extended lead data (`extractedData`, `messages`).
+4. Verify the chat transcript matches the chronological order of the conversation and is styled cleanly.
+
+
+
+# Phase 25: Admin Configuration Console
+
+The goal of this phase is to provide a non-technical admin interface to create, edit, and preview AI Agents (Industry Configurations) dynamically.
+
+## User Review Required
+
+> [!NOTE]
+> 1. **Routing**: The project document mentions `apps/web/app/admin/configs/page.tsx`, but we established our persistent admin layout in `/dashboard`. I propose we build this inside the dashboard layout at `apps/web/app/dashboard/configs/page.tsx` and `apps/web/app/dashboard/configs/[id]/page.tsx` to keep the layout unified. Do you approve?
+> 2. **Preview Endpoint**: The plan mentions a `GET /configs/:id/preview` endpoint. However, a "live preview" of an *unsaved* configuration requires sending the modified config JSON in the request body. Should we implement this as a `POST /industry-configs/preview` endpoint instead, so the frontend can send the draft configuration state?
+
+## Proposed Changes
+
+### 1. Backend Modifications (`apps/api/src/industry-config`)
+
+#### [NEW] `POST /industry-configs/preview`
+- Add an endpoint that accepts a draft configuration payload.
+- Returns the generated `qualificationPrompt` and a sample greeting so the frontend can display it in the Mini Chat Widget.
+
+### 2. Frontend Configuration List
+
+#### [NEW] `apps/web/app/dashboard/configs/page.tsx`
+- A table listing all configurations for the tenant.
+- Shows Config Name, Industry, Active status toggle, and an "Edit" button.
+
+### 3. Frontend Configuration Editor
+
+#### [NEW] `apps/web/app/dashboard/configs/[id]/page.tsx`
+- A complex, multi-section form validated with Zod.
+- **Section 1 (Basic Details)**: Persona Name, Role, Greeting, and Tone Selector.
+- **Section 2 (Qualification Fields)**: A dynamic list where admins can Add/Remove fields, set `fieldKey`, `type`, `required`, and `extractionHint`.
+- **Section 3 (Scoring Rules)**: A dynamic list for scoring criteria.
+- **Section 4 (Live Preview)**: A "Preview AI" button that hits the preview endpoint and renders a mini `ChatWidget` (or a static mock of the AI's first response) using the unsaved settings.
+
+#### [NEW] `apps/web/components/admin/ConfigEditor.tsx`
+- A dedicated Client Component to handle the complex local form state (arrays of fields and rules) and Zod validation before submitting the `PUT /industry-configs/:id` request.
+
+## Verification Plan
+1. Navigate to `/dashboard/configs` and verify the list of configs loads.
+2. Click into the Logistics config and add a new Qualification Field ("Preferred Contact Time").
+3. Click "Live Preview" to verify the backend successfully generates a prompt incorporating the new field.
+4. Save the configuration and verify the backend persists it accurately without errors.
