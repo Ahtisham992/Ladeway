@@ -93,4 +93,18 @@ export class TenantService {
       }
     });
   }
+
+  async getTenantById(id: string) {
+    return this.prisma.$system.tenant.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        subdomain: true,
+        plan: true,
+        apiKey: true,
+        createdAt: true
+      }
+    });
+  }
 }

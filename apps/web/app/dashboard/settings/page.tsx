@@ -3,20 +3,16 @@ export const dynamic = 'force-dynamic';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
-import { PrismaClient } from '@prisma/client';
-import jwt from 'jsonwebtoken';
-
-const prisma = new PrismaClient();
 
 async function getTenantInfo(token: string) {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
   try {
-    const decoded: any = jwt.decode(token);
-    if (!decoded || !decoded.tenantId) return null;
-
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: decoded.tenantId }
+    const res = await fetch(`${baseUrl}/tenants/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store'
     });
-    return tenant;
+    if (!res.ok) return null;
+    return await res.json();
   } catch (e) {
     return null;
   }

@@ -1,5 +1,6 @@
-import { Controller, Post, Body, Get } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, Request } from '@nestjs/common';
 import { TenantService } from './tenant.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('tenants')
 export class TenantController {
@@ -8,6 +9,12 @@ export class TenantController {
   @Get('public')
   async getPublicTenants() {
     return this.tenantService.getPublicTenants();
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  async getMyTenant(@Request() req: any) {
+    return this.tenantService.getTenantById(req.user.tenantId);
   }
 
   @Post('register')
