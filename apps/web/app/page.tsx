@@ -1,116 +1,109 @@
-export const dynamic = 'force-dynamic'
+export const dynamic = 'force-dynamic';
 
-import Link from 'next/link'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
-import { Button } from '@/components/ui/Button'
-import { AlertCircle } from 'lucide-react'
+import Link from 'next/link';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Building2, ArrowRight } from 'lucide-react';
 
-interface IndustryConfig {
-  id: string
-  industryName: string
-  personaName: string
-  greeting?: string
+interface Tenant {
+  id: string;
+  name: string;
+  subdomain: string;
+  createdAt: string;
 }
 
-async function getConfigs(): Promise<{ configs: IndustryConfig[], error: boolean }> {
-  const apiUrl = process.env.API_URL
+async function getTenants(): Promise<{ tenants: Tenant[], error: boolean }> {
+  const apiUrl = process.env.API_URL || 'http://localhost:3001';
   
-  if (!apiUrl) {
-    return { configs: [], error: true }
-  }
-
   try {
-    const res = await fetch(`${apiUrl}/industry-configs/public`, { cache: 'no-store' })
+    const res = await fetch(`${apiUrl}/tenants/public`, { cache: 'no-store' });
     if (!res.ok) {
-      return { configs: [], error: true }
+      return { tenants: [], error: true };
     }
-    const data = await res.json()
-    return { configs: data, error: false }
+    const data = await res.json();
+    return { tenants: data, error: false };
   } catch (err) {
-    return { configs: [], error: true }
+    return { tenants: [], error: true };
   }
 }
 
 export default async function LandingPage() {
-  const { configs, error } = await getConfigs()
-
-  const fallbackConfigs: IndustryConfig[] = [
-    { id: 'demo-1', industryName: 'Logistics & Moving', personaName: 'Alexandra' },
-    { id: 'demo-2', industryName: 'Real Estate', personaName: 'James' },
-    { id: 'demo-3', industryName: 'Legal Services', personaName: 'Michael' },
-  ]
-
-  const displayConfigs = error || configs.length === 0 ? fallbackConfigs : configs
+  const { tenants, error } = await getTenants();
 
   return (
-    <div className="min-h-screen bg-background text-secondary-900 font-sans flex flex-col">
-      <header className="w-full border-b border-secondary-200 bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-6 flex justify-between items-center">
-          <h1 className="text-2xl font-bold tracking-tight text-primary">Ladeway Engine</h1>
-          <nav>
-            <Link href="/design" className="text-sm font-medium text-secondary-500 hover:text-primary transition-colors">
-              Design System
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      {/* Header */}
+      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center transform rotate-12">
+              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <span className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Ladeway</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <Link href="/login" className="text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white transition-colors">
+              Log in
             </Link>
-          </nav>
+            <Link href="/signup">
+              <Button size="sm">Get Started</Button>
+            </Link>
+          </div>
         </div>
       </header>
 
-      <main className="flex-1 w-full mx-auto max-w-6xl px-4 py-16 flex flex-col items-center">
-        <div className="text-center max-w-2xl mb-16">
-          <h2 className="text-4xl font-extrabold tracking-tight text-primary sm:text-5xl mb-4">
-            One Engine. <br/> Infinite Industries.
-          </h2>
-          <p className="text-lg text-secondary-500">
-            Select an industry demo below to experience the dynamic conversation flow.
-          </p>
-        </div>
+      {/* Hero Section */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center animate-fade-in-up">
+        <h1 className="text-4xl md:text-5xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+          AI-Powered Lead Qualification
+        </h1>
+        <p className="mt-4 text-xl text-slate-500 dark:text-slate-400 max-w-2xl mx-auto">
+          Explore our network of partner companies using Ladeway's intelligent agents to automatically qualify, score, and route their inbound leads.
+        </p>
+      </div>
 
-        {error && (
-          <div className="mb-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex flex-col items-center max-w-md text-center">
-            <div className="flex items-center text-yellow-800 mb-2 font-medium">
-              <AlertCircle size={20} className="mr-2" />
-              Backend starting up...
-            </div>
-            <p className="text-sm text-yellow-700 mb-4">
-              We couldn't reach the API. Showing sample data while the server wakes up.
-            </p>
-            <Link href="/" replace>
-              <Button variant="secondary" size="sm">Retry Connection</Button>
-            </Link>
+      {/* Tenants Grid */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24">
+        {error ? (
+          <div className="text-center p-8 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl border border-red-200 dark:border-red-800">
+            Failed to load companies. Is the API server running?
+          </div>
+        ) : tenants.length === 0 ? (
+          <div className="text-center p-12 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-500">
+            No companies have joined yet. Be the first!
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
+            {tenants.map(tenant => (
+              <Card key={tenant.id} className="hover:shadow-lg transition-all duration-300 hover:-translate-y-1 group">
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Building2 className="w-5 h-5 text-primary" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-lg">{tenant.name}</CardTitle>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{tenant.subdomain}.ladeway.com</p>
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <Link href={`/company/${tenant.id}`} className="w-full">
+                    <Button variant="outline" className="w-full justify-between group-hover:bg-primary group-hover:text-white group-hover:border-primary transition-colors">
+                      View AI Agents
+                      <ArrowRight className="w-4 h-4 ml-2 opacity-70" />
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 w-full">
-          {displayConfigs.map((config) => (
-            <Card key={config.id} className="flex flex-col h-full hover:shadow-md transition-shadow">
-              <CardHeader>
-                <div className="h-12 w-12 rounded-lg bg-primary-50 text-primary flex items-center justify-center mb-4 text-xl font-bold">
-                  {config.industryName.charAt(0)}
-                </div>
-                <CardTitle className="text-xl">{config.industryName}</CardTitle>
-              </CardHeader>
-              <CardContent className="flex-1 flex flex-col">
-                <p className="text-secondary-500 text-sm mb-6 flex-1">
-                  Interact with <strong>{config.personaName}</strong>, the AI representative dynamically configured for the {config.industryName} domain.
-                </p>
-                <Link href={`/chat/${config.id}`} className="mt-auto block">
-                  <Button className="w-full">Start Conversation</Button>
-                </Link>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        <div className="mt-16 pt-8 border-t border-secondary-200 w-full text-center">
-          <p className="text-lg font-medium text-secondary-600 italic">
-            "Same AI engine. Different industries. Configured entirely through data — no code changes."
-          </p>
-        </div>
-      </main>
-      
-      <footer className="w-full border-t border-secondary-200 bg-white py-8 text-center text-secondary-500 text-sm">
-        <p>&copy; {new Date().getFullYear()} Ladeway Conversation Engine. All rights reserved.</p>
-      </footer>
+      </div>
     </div>
-  )
+  );
 }

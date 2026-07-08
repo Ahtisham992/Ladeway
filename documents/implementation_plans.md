@@ -1360,6 +1360,84 @@ The goal of this phase is to provide a complete, self-serve registration flow wh
 4. Complete the 3 onboarding steps.
 5. Verify the backend successfully created the Tenant, User, and default IndustryConfig.
 
+---
+
+# Phase 28: Security Hardening
+
+The goal of this phase is to secure the platform against common attacks, enforce rate limits, strict CORS policies, and add HTTP security headers before production deployment.
+
+## User Review Required
+> [!NOTE]
+> Please review the security measures below:
+> 1. **CORS Origins**: The plan allows `localhost:3000` and `https://ladeway.vercel.app`. Are there any other origins needed for the embed script (e.g., wildcard for customer domains, or do we use a specific public endpoint for the chat)?
+> 2. **Helmet Setup**: Adding standard security headers (HSTS, NoSniff, FrameGuard).
+> 3. **Body Size Limits**: Setting global JSON body limit to `1mb` to prevent payload injection attacks.
+
+## Proposed Changes
+
+### 1. Security Packages
+- Install `helmet` for NestJS: `npm install helmet`.
+
+### 2. Main NestJS Configuration (`apps/api/src/main.ts`)
+- Enable CORS explicitly for `localhost:3000` and `https://ladeway.vercel.app`.
+- Inject `helmet()` middleware for default security headers.
+- Configure `express.json({ limit: '1mb' })` to restrict massive request bodies.
+
+### 3. Controller Audits
+- Run a quick codebase sweep to ensure `GET /analytics`, `POST /industry-configs`, and `PATCH /leads` are all strictly decorated with `@UseGuards(JwtAuthGuard, RolesGuard)` and `@Roles('ADMIN', 'REP')` as needed.
+- Open up `POST /conversations/message` to allow requests from any origin (since the chat widget lives on external customer websites). We will implement a specific CORS exception or wildcard for the public Chat API routes.
+
+## Verification Plan
+1. Check headers using curl (`curl -I http://localhost:3001`) to verify `x-frame-options` and `strict-transport-security` are present.
+2. Verify cross-origin requests from an unauthorized domain fail with CORS errors.
+3. Verify public chat endpoints remain accessible from external websites.
+
+---
+
+# Phase: Public Storefront & Dashboard Navigation Fixes
+
+The goal of this phase is to revamp the public landing page to act as a multi-tenant storefront, fix broken 404 links in the admin dashboard, and connect the authentication flow.
+
+## User Review Required
+> [!NOTE]
+> Please review the plan for the storefront and the dashboard fixes:
+> 1. **Dashboard Overview**: The `/dashboard/overview` link currently 404s. Should I build a simple welcome page with high-level stats (similar to Analytics), or should we just redirect `/dashboard/overview` to the `Leads` pipeline? 
+> 2. **Dashboard Settings**: I will build a `/dashboard/settings` page displaying the tenant's Company Name and Subdomain (read-only for now) to fix the 404 and maintain the theme. Is this acceptable?
+> 3. **Public Storefront**: The landing page will list all tenants. Clicking one goes to `/company/[id]`, which lists their specific AI Agents. Is this the exact flow you envision?
+
+## Proposed Changes
+
+### 1. Backend APIs
+#### [MODIFY] `apps/api/src/tenant/tenant.controller.ts` & `tenant.service.ts`
+- Add `GET /tenants/public` to return a list of tenants (id, name, subdomain) without requiring authentication.
+#### [MODIFY] `apps/api/src/industry-config/industry-config.controller.ts`
+- Ensure `GET /industry-configs/public` accepts an optional `tenantId` query parameter to filter configs by company.
+
+### 2. Frontend: Public Storefront
+#### [MODIFY] `apps/web/app/page.tsx`
+- Build a professional landing page header with **Login** and **Sign up** navigation links.
+- Fetch `GET /tenants/public` and display the companies in a beautiful grid of cards.
+#### [NEW] `apps/web/app/company/[id]/page.tsx`
+- A dedicated public page for a specific company.
+- Fetches `GET /industry-configs/public?tenantId=[id]`.
+- Displays their configured AI Agents with a "Start Conversation" button that links to the existing `/chat/[configId]` route.
+
+### 3. Frontend: Auth Navigation
+#### [MODIFY] `apps/web/app/login/page.tsx`
+- Add a "Don't have an account? Sign up" link at the bottom of the form, pointing to `/signup`.
+
+### 4. Frontend: Admin Dashboard Fixes
+#### [NEW] `apps/web/app/dashboard/overview/page.tsx`
+- Create the Overview page with a consistent admin theme (either simple stats or redirect based on your feedback).
+#### [NEW] `apps/web/app/dashboard/settings/page.tsx`
+- Create the Settings page rendering a unified UI card displaying the workspace details.
+
+## Verification Plan
+1. Visit `http://localhost:3000/`. Verify the new header links (Login/Signup) and the list of tenant companies.
+2. Click on a company and verify it navigates to `/company/[id]` and displays their AI agents.
+3. Click an AI agent and verify it opens the chat widget.
+4. Log into the admin portal and click "Overview" and "Settings" in the sidebar to verify the 404s are resolved and the theme matches.
+
 # Phase 25: Admin Configuration Console
 
 The goal of this phase is to provide a non-technical admin interface to create, edit, and preview AI Agents (Industry Configurations) dynamically.

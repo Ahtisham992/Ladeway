@@ -79,4 +79,18 @@ export class TenantService {
     // Automatically log the user in
     return this.authService.login(user);
   }
+
+  async getPublicTenants() {
+    return this.prisma.$system.tenant.findMany({
+      select: {
+        id: true,
+        name: true,
+        subdomain: true,
+        createdAt: true
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+  }
 }

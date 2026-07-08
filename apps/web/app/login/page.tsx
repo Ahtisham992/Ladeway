@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { login } from './actions';
 import { useFormStatus } from 'react-dom';
+import Link from 'next/link';
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -142,6 +143,13 @@ export default function LoginPage() {
 
             <div>
               <SubmitButton />
+            </div>
+
+            <div className="text-center mt-4 text-sm text-gray-400">
+              Don't have an account?{' '}
+              <Link href="/signup" className="font-medium text-indigo-400 hover:text-indigo-300 transition-colors">
+                Sign up
+              </Link>
             </div>
           </form>
         </div>

@@ -38,14 +38,20 @@ export class IndustryConfigService {
     });
   }
 
-  async getPublicConfigs() {
+  async getPublicConfigs(tenantId?: string) {
+    const whereClause: any = { isActive: true };
+    if (tenantId) {
+      whereClause.tenantId = tenantId;
+    }
+    
     return this.prisma.$system.industryConfig.findMany({
-      where: { isActive: true },
+      where: whereClause,
       select: {
         id: true,
         industryName: true,
         personaName: true,
-        greeting: true
+        greeting: true,
+        tenantId: true
       },
       orderBy: { createdAt: 'asc' }
     });

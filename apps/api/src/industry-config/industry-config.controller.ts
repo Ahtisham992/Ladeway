@@ -33,8 +33,8 @@ export class IndustryConfigController {
   }
 
   @Get('public')
-  async getPublicConfigs() {
-    return this.industryConfigService.getPublicConfigs();
+  async getPublicConfigs(@Query('tenantId') tenantId?: string) {
+    return this.industryConfigService.getPublicConfigs(tenantId);
   }
 
   @Get(':id')
