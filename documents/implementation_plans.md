@@ -1311,12 +1311,54 @@ The goal of this phase is to provide Sales Reps with a comprehensive, single-scr
 - Depending on the answer to Open Question #1, I will either build this as a dedicated full page at `/dashboard/leads/[id]` OR integrate it as a slide-over panel directly within the `LeadPipeline` component that opens when clicking a table row.
 
 ## Verification Plan
-1. Start the dev server and navigate to the `/dashboard`.
-2. Click on an existing lead in the pipeline table.
-3. Verify that the detail view opens correctly and successfully fetches the extended lead data (`extractedData`, `messages`).
-4. Verify the chat transcript matches the chronological order of the conversation and is styled cleanly.
+1. Start the dev server and- Validate that the dashboard fully respects Dark Mode color semantics.
 
+---
 
+# Phase 27: Tenant Onboarding & Auth Flow
+
+The goal of this phase is to provide a complete, self-serve registration flow where a new customer can sign up, automatically receive a default AI agent, and be guided through an onboarding wizard to deploy their agent immediately.
+
+## User Review Required
+> [!NOTE]
+> Please review the signup fields and the onboarding flow. 
+> 1. **Signup Fields**: The plan collects Company Name, Subdomain, Admin Email, and Password. Is this sufficient?
+> 2. **Login Redirect**: Should the signup form immediately log the user in and redirect them to `/dashboard/onboarding`? (I propose yes, for the smoothest UX).
+> 3. **Default Template**: The backend will automatically create a "Logistics/Moving" template for every new tenant as a starting point.
+
+## Proposed Changes
+
+### 1. Backend APIs
+#### [NEW] `apps/api/src/tenant/tenant.controller.ts` & `tenant.service.ts`
+- Create `POST /tenants/register` endpoint.
+- Validates the uniqueness of the `subdomain` and `email`.
+- Wraps the following in a Prisma transaction (using `$system` client):
+  - Creates the new `Tenant`.
+  - Hashes the password with `bcrypt` and creates the `User` (Role: `ADMIN`).
+  - Creates a default `IndustryConfig` (seeded with the Logistics/Moving template).
+- Returns the JWT Auth Token (using existing `AuthService.login` logic) so the frontend can immediately authenticate the user.
+
+### 2. Frontend Registration
+#### [NEW] `apps/web/app/signup/page.tsx` & `actions.ts`
+- A sleek, centered registration form matching the `login` page aesthetics.
+- Captures Company Name, Subdomain, Email, and Password.
+- Submits via a Next.js Server Action to the new `/tenants/register` API.
+- Upon success, sets the `access_token` cookie and redirects to `/dashboard/onboarding`.
+
+### 3. Onboarding Wizard
+#### [NEW] `apps/web/app/dashboard/onboarding/page.tsx`
+- A specialized dashboard view restricted to new users.
+- **Step 1: Review AI Persona**: Displays the newly generated default configuration and allows the admin to edit the `personaName`, `personaRole`, and `greeting`.
+- **Step 2: Review Qualification Fields**: Displays the pre-seeded qualification fields (Move Type, Origin, Destination) and allows minor edits.
+- **Step 3: Embed Code**: Provides the `<script>` tag snippet with the tenant's API key/subdomain for them to copy and paste into their website.
+- **Finish**: A button that completes onboarding and redirects to `/dashboard/overview`.
+
+## Verification Plan
+1. Navigate to `http://localhost:3000/signup`.
+2. Fill out the form with a new company and submit.
+3. Verify successful redirection to the onboarding wizard.
+4. Complete the 3 onboarding steps.
+5. Verify the backend successfully created the Tenant, User, and default IndustryConfig.
 
 # Phase 25: Admin Configuration Console
 
