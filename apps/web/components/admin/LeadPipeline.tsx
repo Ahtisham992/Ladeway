@@ -6,6 +6,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { cn } from '@/lib/utils';
+import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
 
 export function LeadPipeline({ token }: { token: string }) {
   const [leads, setLeads] = useState<any[]>([]);
@@ -117,12 +119,13 @@ export function LeadPipeline({ token }: { token: string }) {
               <TableHead>Tier</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Date</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {leads.length === 0 && !loading && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-slate-500">
+                <TableCell colSpan={7} className="text-center py-8 text-slate-500">
                   No leads found.
                 </TableCell>
               </TableRow>
@@ -180,6 +183,15 @@ export function LeadPipeline({ token }: { token: string }) {
                     minute: '2-digit',
                     hour12: true,
                   })}
+                </TableCell>
+                <TableCell className="text-right">
+                  <Link 
+                    href={`/dashboard/leads/${lead.id}`}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-md hover:bg-slate-200 hover:text-slate-900 transition-colors dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white"
+                  >
+                    View
+                    <ArrowRight size={14} />
+                  </Link>
                 </TableCell>
               </TableRow>
             ))}
