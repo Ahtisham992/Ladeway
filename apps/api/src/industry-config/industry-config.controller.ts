@@ -7,7 +7,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { LLMRouterService } from '../ai/llm-router.service';
 import { PromptService } from '../ai/prompt.service';
-import { ConversationSession } from '../session/types/session.types';
+import { ConversationSession, ConversationStatus } from '../session/types/session.types';
 
 @Controller('industry-configs')
 export class IndustryConfigController {
@@ -109,13 +109,17 @@ export class IndustryConfigController {
 
     const session: ConversationSession = {
       conversationId: 'preview-session',
+      tenantId: 'preview-tenant',
+      configId: 'preview-config',
+      status: ConversationStatus.GREETING,
       capturedFields: {},
       missingFields: (config.fieldsJson as any[]).map(f => f.key),
-      turnCount: 0
+      turnCount: 0,
+      lastActivityAt: new Date().toISOString()
     };
 
-    const userMessage = 'Hello';
-    const messages = this.promptService.assembleConversationPrompt(config, session, [{ role: 'user', content: userMessage }]);
+    const userMessages = draftConfig.messages || [{ role: 'user', content: 'Hello' }];
+    const messages = this.promptService.assembleConversationPrompt(config, session, userMessages);
 
     let fullResponse = '';
     for await (const token of this.llmRouter.stream(messages)) {

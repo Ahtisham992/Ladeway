@@ -122,30 +122,42 @@ export function LeadDetailPanel({ lead, token }: { lead: any, token: string }) {
           <h3 className="text-sm font-semibold text-slate-900 mb-4 dark:text-white">Extracted Data</h3>
           <div className="space-y-4">
             {lead.conversation?.extractedData?.length > 0 ? (
-              lead.conversation.extractedData.map((data: any) => {
-                const confidenceColor = data.confidence >= 0.9 ? 'bg-green-500'
-                                      : data.confidence >= 0.7 ? 'bg-yellow-500'
-                                      : data.confidence >= 0.6 ? 'bg-slate-400'
-                                      : 'bg-red-500';
-                
-                const isLowConfidence = data.confidence < 0.6;
+              (() => {
+                const map = new Map();
+                for (const d of lead.conversation.extractedData) {
+                  const val = d.fieldValue?.toLowerCase() || '';
+                  if (val && val !== 'null' && val !== 'none' && val !== 'not explicitly stated' && val !== 'not specified') {
+                    map.set(d.fieldKey, d);
+                  }
+                }
+                const deduplicated = Array.from(map.values());
+                if (deduplicated.length === 0) return <p className="text-sm text-slate-500">No valid data extracted yet.</p>;
 
-                return (
-                  <div key={data.id} className="flex justify-between items-start border-b border-slate-100 pb-3 last:border-0 last:pb-0 dark:border-slate-700">
-                    <div className="flex-1 pr-4">
-                      <span className="text-xs font-medium text-slate-400 uppercase tracking-wider block mb-1">
-                        {formatFieldKey(data.fieldKey)}
-                      </span>
-                      <span className="text-sm text-slate-900 font-medium dark:text-white">
-                        {data.fieldValue || '—'}
-                      </span>
+                return deduplicated.map((data: any) => {
+                  const confidenceColor = data.confidence >= 0.9 ? 'bg-green-500'
+                                        : data.confidence >= 0.7 ? 'bg-yellow-500'
+                                        : data.confidence >= 0.6 ? 'bg-slate-400'
+                                        : 'bg-red-500';
+                  
+                  const isLowConfidence = data.confidence < 0.6;
+
+                  return (
+                    <div key={data.id} className="flex justify-between items-start border-b border-slate-100 pb-3 last:border-0 last:pb-0 dark:border-slate-700">
+                      <div className="flex-1 pr-4">
+                        <span className="text-xs font-medium text-slate-400 uppercase tracking-wider block mb-1">
+                          {formatFieldKey(data.fieldKey)}
+                        </span>
+                        <span className="text-sm text-slate-900 font-medium dark:text-white">
+                          {data.fieldValue || '—'}
+                        </span>
+                      </div>
+                      <div className="flex items-center pt-2" title={isLowConfidence ? "Low confidence — verify with customer." : `Confidence: ${Math.round(data.confidence * 100)}%`}>
+                        <div className={cn("w-2.5 h-2.5 rounded-full shadow-sm", confidenceColor)} />
+                      </div>
                     </div>
-                    <div className="flex items-center pt-2" title={isLowConfidence ? "Low confidence — verify with customer." : `Confidence: ${Math.round(data.confidence * 100)}%`}>
-                      <div className={cn("w-2.5 h-2.5 rounded-full shadow-sm", confidenceColor)} />
-                    </div>
-                  </div>
-                );
-              })
+                  );
+                });
+              })()
             ) : (
               <p className="text-sm text-slate-500">No data extracted.</p>
             )}

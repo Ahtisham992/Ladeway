@@ -52,6 +52,7 @@ export class IndustryConfigService {
   }
 
   async findOne(id: string) {
+    if (!id) throw new NotFoundException('Configuration ID is required');
     const config = await this.prisma.$system.industryConfig.findUnique({
       where: { id },
     });
@@ -78,35 +79,7 @@ export class IndustryConfigService {
 
   async update(id: string, data: UpdateIndustryConfigDto): Promise<{ id: string, versioned: boolean }> {
     const config = await this.findOne(id);
-    const tenantId = config.tenantId;
-
-    const fieldsChanged = data.fieldsJson && JSON.stringify(data.fieldsJson) !== JSON.stringify(config.fieldsJson);
-    const scoringRulesChanged = data.scoringRulesJson && JSON.stringify(data.scoringRulesJson) !== JSON.stringify(config.scoringRulesJson);
-
-    if (fieldsChanged || scoringRulesChanged) {
-      // Version bump: deactivate old, create new
-      await this.prisma.industryConfig.update({
-        where: { id },
-        data: { isActive: false }
-      });
-
-      const newConfig = await this.prisma.industryConfig.create({
-        data: {
-          tenantId,
-          industryName: config.industryName,
-          personaName: data.personaName ?? config.personaName,
-          personaRole: data.personaRole ?? config.personaRole,
-          greeting: data.greeting ?? config.greeting,
-          tone: data.tone ?? config.tone,
-          fieldsJson: (data.fieldsJson ?? config.fieldsJson) as any,
-          scoringRulesJson: (data.scoringRulesJson ?? config.scoringRulesJson) as any,
-          isActive: data.isActive ?? config.isActive,
-        }
-      });
-
-      return { id: newConfig.id, versioned: true };
-    }
-
+    
     // In-place update
     const updateData: any = { ...data };
     if (data.fieldsJson) updateData.fieldsJson = data.fieldsJson as any;

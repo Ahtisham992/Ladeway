@@ -106,7 +106,7 @@ export function ChatWidget({ conversationId, sessionToken, initialMessages, onCo
               }
               if (currentEvent === "done") {
                 setIsStreaming(false)
-                if (["CLOSED", "TRANSFERRED", "ABANDONED", "SCORED"].includes(data.status)) {
+                if (["CLOSED", "TRANSFERRED", "ABANDONED"].includes(data.status)) {
                   setIsComplete(true)
                   if (data.confirmationMessage) {
                     setCompletionDetails({

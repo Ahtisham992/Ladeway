@@ -9,9 +9,13 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   public readonly $system: PrismaClient;
 
   constructor() {
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    const pool = new Pool({ 
+      connectionString: process.env.DATABASE_URL,
+      max: 50,
+      connectionTimeoutMillis: 15000 
+    });
     const adapter = new PrismaPg(pool);
-    super({ adapter });
+    super({ adapter, log: ['error', 'warn'] });
     
     // Save the raw unextended client for system-level operations (like Auth)
     this.$system = this;
@@ -30,7 +34,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
                 self.$executeRawUnsafe(`SET LOCAL ROLE authenticated`),
                 self.$executeRawUnsafe(`SELECT set_config('app.current_tenant_id', '${tenantId}', true)`),
                 query(args),
-              ]);
+              ], { maxWait: 15000, timeout: 30000 });
               return result;
             } else {
               // If no tenant context, we still need to restrict to authenticated so it blocks queries
@@ -40,7 +44,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
                 self.$executeRawUnsafe(`SET LOCAL ROLE authenticated`),
                 self.$executeRawUnsafe(`SELECT set_config('app.current_tenant_id', '', true)`),
                 query(args),
-              ]);
+              ], { maxWait: 15000, timeout: 30000 });
               return result;
             }
           },

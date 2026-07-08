@@ -6,13 +6,14 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { Modal } from '@/components/ui/Modal';
 import { MessageBubble } from '../chat/MessageBubble';
 import { Plus, Trash2, Save, PlayCircle, Loader2 } from 'lucide-react';
 
 const QualificationFieldSchema = z.object({
   key: z.string().min(1, 'Key required'),
   label: z.string().min(1, 'Label required'),
-  type: z.enum(['string', 'boolean', 'enum', 'number']),
+  type: z.enum(['text', 'number', 'date', 'enum']),
   required: z.boolean(),
   options: z.array(z.string()).optional(),
   extractionHint: z.string().min(1, 'Hint required'),
@@ -20,7 +21,7 @@ const QualificationFieldSchema = z.object({
 
 const ScoringRuleSchema = z.object({
   field: z.string().min(1, 'Field required'),
-  condition: z.enum(['equals', 'contains', 'greater_than', 'less_than', 'exists']),
+  condition: z.enum(['present', 'equals', 'greater_than', 'less_than', 'in']),
   value: z.any().optional(),
   weight: z.number().min(0).max(1),
 });
@@ -48,6 +49,7 @@ type ConfigState = {
 type ConfigAction =
   | { type: 'UPDATE_BASIC'; payload: Partial<ConfigState> }
   | { type: 'ADD_FIELD' }
+  | { type: 'ADD_FIELD_OBJECT'; payload: any }
   | { type: 'UPDATE_FIELD'; index: number; payload: Partial<any> }
   | { type: 'REMOVE_FIELD'; index: number }
   | { type: 'ADD_RULE' }
@@ -61,7 +63,13 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
     case 'ADD_FIELD':
       return {
         ...state,
-        fields: [...state.fields, { key: '', label: '', type: 'string', required: true, extractionHint: '' }]
+        fields: [...state.fields, { key: '', label: '', type: 'text', required: true, extractionHint: '' }]
+      };
+    case 'ADD_FIELD_OBJECT':
+      return {
+        ...state,
+        fields: [...state.fields, action.payload],
+        rules: [...state.rules, { field: action.payload.key, condition: 'present', value: '', weight: 0.1 }]
       };
     case 'UPDATE_FIELD': {
       const oldKey = state.fields[action.index].key;
@@ -80,7 +88,7 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
     case 'ADD_RULE':
       return {
         ...state,
-        rules: [...state.rules, { field: '', condition: 'equals', value: '', weight: 0.1 }]
+        rules: [...state.rules, { field: '', condition: 'present', value: '', weight: 0.1 }]
       };
     case 'UPDATE_RULE':
       return {
@@ -114,7 +122,10 @@ export function ConfigEditor({ token, initialConfig }: { token: string; initialC
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
-  const [previewResponse, setPreviewResponse] = useState<string | null>(null);
+  const [previewMessages, setPreviewMessages] = useState<any[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isFieldModalOpen, setIsFieldModalOpen] = useState(false);
+  const [newField, setNewField] = useState({ key: '', label: '', type: 'text', required: false, extractionHint: '' });
 
   const handleSave = async () => {
     // Validate
@@ -131,11 +142,15 @@ export function ConfigEditor({ token, initialConfig }: { token: string; initialC
     const result = ConfigFormSchema.safeParse(payload);
     if (!result.success) {
       const newErrors: Record<string, string> = {};
-      result.error.errors.forEach(e => {
-        const path = e.path.join('.');
-        newErrors[path] = e.message;
-      });
+      if (result.error && result.error.issues) {
+        result.error.issues.forEach(e => {
+          const path = e.path.join('.');
+          newErrors[path] = e.message;
+        });
+      }
+      console.log('Validation Errors:', newErrors);
       setErrors(newErrors);
+      alert('Validation failed. Please check the red warning text under the fields.');
       return;
     }
 
@@ -177,9 +192,16 @@ export function ConfigEditor({ token, initialConfig }: { token: string; initialC
     }
   };
 
-  const handlePreview = async () => {
+  const sendMessage = async (overrideMessage?: string) => {
+    const text = overrideMessage || chatInput;
+    if (!text.trim()) return;
+    
+    const currentMessages = overrideMessage ? [] : previewMessages;
+    const newMessages = [...currentMessages, { role: 'user', content: text }];
+    setPreviewMessages(newMessages);
+    setChatInput('');
     setIsPreviewing(true);
-    setPreviewResponse(null);
+
     try {
       const payload = {
         industryName: state.industryName,
@@ -188,6 +210,7 @@ export function ConfigEditor({ token, initialConfig }: { token: string; initialC
         greeting: state.greeting,
         tone: state.tone,
         fieldsJson: state.fields,
+        messages: newMessages
       };
 
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/industry-configs/preview`, {
@@ -201,12 +224,12 @@ export function ConfigEditor({ token, initialConfig }: { token: string; initialC
 
       if (res.ok) {
         const data = await res.json();
-        setPreviewResponse(data.response);
+        setPreviewMessages([...newMessages, { role: 'assistant', content: data.response }]);
       } else {
-        setPreviewResponse('Failed to generate preview. Check your configuration.');
+        setPreviewMessages([...newMessages, { role: 'assistant', content: 'Failed to generate response.' }]);
       }
     } catch (err) {
-      setPreviewResponse('Network error while generating preview.');
+      setPreviewMessages([...newMessages, { role: 'assistant', content: 'Network error.' }]);
     } finally {
       setIsPreviewing(false);
     }
@@ -217,14 +240,14 @@ export function ConfigEditor({ token, initialConfig }: { token: string; initialC
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-            {initialConfig ? `Edit Configuration (v${initialConfig.version})` : 'New Configuration'}
+            {initialConfig ? `Edit Configuration` : 'New Configuration'}
           </h1>
           <p className="text-slate-500 mt-1">Configure persona, qualification rules, and scoring logic.</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={handlePreview} disabled={isPreviewing}>
+          <Button variant="secondary" onClick={() => sendMessage('Hello')} disabled={isPreviewing}>
             {isPreviewing ? <Loader2 size={16} className="mr-2 animate-spin" /> : <PlayCircle size={16} className="mr-2" />}
-            Live Preview
+            Restart Preview
           </Button>
           <Button onClick={handleSave} disabled={isSaving}>
             {isSaving ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Save size={16} className="mr-2" />}
@@ -240,7 +263,7 @@ export function ConfigEditor({ token, initialConfig }: { token: string; initialC
             <h2 className="text-lg font-semibold text-slate-900 mb-4 dark:text-white">Basic Details</h2>
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
-                <label className="block text-sm font-medium mb-1">Industry Name</label>
+                <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">Industry Name</label>
                 <Input 
                   value={state.industryName} 
                   onChange={e => dispatch({ type: 'UPDATE_BASIC', payload: { industryName: e.target.value } })}
@@ -249,7 +272,7 @@ export function ConfigEditor({ token, initialConfig }: { token: string; initialC
                 {errors['industryName'] && <p className="text-red-500 text-xs mt-1">{errors['industryName']}</p>}
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Persona Name</label>
+                <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">Persona Name</label>
                 <Input 
                   value={state.personaName} 
                   onChange={e => dispatch({ type: 'UPDATE_BASIC', payload: { personaName: e.target.value } })}
@@ -258,7 +281,7 @@ export function ConfigEditor({ token, initialConfig }: { token: string; initialC
                 {errors['personaName'] && <p className="text-red-500 text-xs mt-1">{errors['personaName']}</p>}
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Persona Role</label>
+                <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">Persona Role</label>
                 <Input 
                   value={state.personaRole} 
                   onChange={e => dispatch({ type: 'UPDATE_BASIC', payload: { personaRole: e.target.value } })}
@@ -267,9 +290,9 @@ export function ConfigEditor({ token, initialConfig }: { token: string; initialC
                 {errors['personaRole'] && <p className="text-red-500 text-xs mt-1">{errors['personaRole']}</p>}
               </div>
               <div className="col-span-2">
-                <label className="block text-sm font-medium mb-1">Greeting Message</label>
+                <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">Greeting Message</label>
                 <textarea 
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-slate-900 dark:border-slate-700"
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary dark:bg-slate-900 dark:border-slate-700 text-slate-900 dark:text-slate-100"
                   rows={2}
                   value={state.greeting}
                   onChange={e => dispatch({ type: 'UPDATE_BASIC', payload: { greeting: e.target.value } })}
@@ -278,7 +301,7 @@ export function ConfigEditor({ token, initialConfig }: { token: string; initialC
                 {errors['greeting'] && <p className="text-red-500 text-xs mt-1">{errors['greeting']}</p>}
               </div>
               <div className="col-span-2">
-                <label className="block text-sm font-medium mb-1">Tone</label>
+                <label className="block text-sm font-medium mb-1 text-slate-700 dark:text-slate-300">Tone</label>
                 <Select 
                   value={state.tone} 
                   onChange={e => dispatch({ type: 'UPDATE_BASIC', payload: { tone: e.target.value as any } })}
@@ -296,7 +319,7 @@ export function ConfigEditor({ token, initialConfig }: { token: string; initialC
           <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 dark:bg-slate-800 dark:border-slate-700">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Qualification Fields</h2>
-              <Button size="sm" variant="outline" onClick={() => dispatch({ type: 'ADD_FIELD' })}>
+              <Button size="sm" variant="secondary" onClick={() => setIsFieldModalOpen(true)}>
                 <Plus size={14} className="mr-1" /> Add Field
               </Button>
             </div>
@@ -449,33 +472,100 @@ export function ConfigEditor({ token, initialConfig }: { token: string; initialC
         {/* Section 4: Live Preview Sidebar */}
         <div className="lg:col-span-1">
           <div className="sticky top-6 bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex flex-col h-[600px] dark:bg-slate-800 dark:border-slate-700">
-            <div className="p-4 border-b border-slate-100 bg-slate-50 dark:bg-slate-900/50 dark:border-slate-700">
-              <h3 className="font-semibold text-slate-900 flex items-center gap-2 dark:text-white">
-                <PlayCircle size={18} className="text-primary" />
-                Live Preview
-              </h3>
-              <p className="text-xs text-slate-500 mt-1">Test your persona and greeting before saving.</p>
+            <div className="p-4 border-b border-slate-100 bg-slate-50 dark:bg-slate-900/50 dark:border-slate-700 flex justify-between items-center">
+              <div>
+                <h3 className="font-semibold text-slate-900 flex items-center gap-2 dark:text-white">
+                  <PlayCircle size={18} className="text-primary" />
+                  Live Preview
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">Test your configuration.</p>
+              </div>
+              <Button size="sm" variant="secondary" onClick={() => sendMessage('Hello')} disabled={isPreviewing}>Restart</Button>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 bg-slate-50/50 dark:bg-slate-900/20">
-              {isPreviewing ? (
+            <div className="flex-1 overflow-y-auto p-4 bg-slate-50/50 dark:bg-slate-900/20 space-y-4">
+              {previewMessages.length === 0 && !isPreviewing ? (
                 <div className="h-full flex flex-col items-center justify-center text-slate-400">
-                  <Loader2 size={32} className="animate-spin mb-4 text-primary/50" />
-                  <p className="text-sm">Generating AI response...</p>
-                </div>
-              ) : previewResponse ? (
-                <div className="space-y-4">
-                  <MessageBubble message={{ id: 'preview-user', sender: 'user', content: 'Hello' }} />
-                  <MessageBubble message={{ id: 'preview-ai', sender: 'ai', content: previewResponse }} />
+                  <p className="text-sm text-center px-6">Click "Restart" to test how the AI will greet users.</p>
                 </div>
               ) : (
-                <div className="h-full flex flex-col items-center justify-center text-slate-400">
-                  <p className="text-sm text-center px-6">Click "Live Preview" to test how the AI will greet users.</p>
+                previewMessages.map((msg, idx) => (
+                  <MessageBubble key={idx} message={{ id: `preview-${idx}`, sender: msg.role === 'user' ? 'user' : 'ai', content: msg.content }} />
+                ))
+              )}
+              {isPreviewing && (
+                <div className="flex justify-center my-4">
+                  <Loader2 size={24} className="animate-spin text-primary/50" />
                 </div>
               )}
+            </div>
+            <div className="p-3 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800">
+              <div className="flex gap-2">
+                <Input 
+                  value={chatInput} 
+                  onChange={e => setChatInput(e.target.value)} 
+                  onKeyDown={e => { if (e.key === 'Enter') sendMessage(); }}
+                  placeholder="Type a message..." 
+                  disabled={isPreviewing}
+                />
+                <Button onClick={() => sendMessage()} disabled={isPreviewing || !chatInput.trim()}>Send</Button>
+              </div>
             </div>
           </div>
         </div>
       </div>
+
+      <Modal isOpen={isFieldModalOpen} onClose={() => setIsFieldModalOpen(false)} title="Add Qualification Field">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Label</label>
+            <Input 
+              value={newField.label} 
+              onChange={e => {
+                const label = e.target.value;
+                const generatedOldKey = newField.label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '');
+                const update: any = { label };
+                if (!newField.key || newField.key === generatedOldKey) {
+                  update.key = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '');
+                }
+                setNewField({ ...newField, ...update });
+              }}
+              placeholder="e.g. Property Type" 
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">JSON Key</label>
+            <Input value={newField.key} onChange={e => setNewField({ ...newField, key: e.target.value })} placeholder="e.g. property_type" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Field Type</label>
+              <Select value={newField.type} onChange={e => setNewField({ ...newField, type: e.target.value })}>
+                <option value="text">Text</option>
+                <option value="number">Number</option>
+                <option value="date">Date</option>
+                <option value="enum">Enum</option>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2 mt-6">
+              <input type="checkbox" id="req" checked={newField.required} onChange={e => setNewField({ ...newField, required: e.target.checked })} />
+              <label htmlFor="req" className="text-sm font-medium">Required for Qualification</label>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Extraction Hint</label>
+            <Input value={newField.extractionHint} onChange={e => setNewField({ ...newField, extractionHint: e.target.value })} placeholder="e.g. Look for..." />
+          </div>
+          <div className="flex justify-end gap-2 mt-6">
+            <Button variant="ghost" onClick={() => setIsFieldModalOpen(false)}>Cancel</Button>
+            <Button onClick={() => {
+              if(!newField.key || !newField.label) { alert('Key and Label are required'); return; }
+              dispatch({ type: 'ADD_FIELD_OBJECT', payload: newField });
+              setIsFieldModalOpen(false);
+              setNewField({ key: '', label: '', type: 'text', required: false, extractionHint: '' });
+            }}>Save Field</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -39,6 +39,9 @@ export class ConversationService {
       .filter(f => f.required)
       .map(f => f.key);
 
+    // Always require intrinsic contact fields
+    missingFields.push('name', 'email', 'phone');
+
     // Using $system (bypasses RLS) because this is a PUBLIC endpoint.
     // Authentication here is via sessionToken (a secure random CUID),
     // not JWT. The tenantId is sourced from the verified IndustryConfig

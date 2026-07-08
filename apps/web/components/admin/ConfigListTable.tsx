@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
 import Link from 'next/link';
-import { Edit2, Loader2 } from 'lucide-react';
+import { Edit2, Loader2, Trash2 } from 'lucide-react';
 
 export function ConfigListTable({ token }: { token: string }) {
   const [configs, setConfigs] = useState<any[]>([]);
@@ -49,6 +49,25 @@ export function ConfigListTable({ token }: { token: string }) {
       console.error('Failed to toggle status', err);
     } finally {
       setToggling(null);
+    }
+  };
+
+  const deleteConfig = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this configuration?')) return;
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/industry-configs/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setConfigs(configs.filter(c => c.id !== id));
+      } else {
+        const err = await res.json();
+        alert(err.message || 'Failed to delete configuration');
+      }
+    } catch (err) {
+      console.error('Failed to delete config', err);
+      alert('Network error while deleting');
     }
   };
 
@@ -112,13 +131,22 @@ export function ConfigListTable({ token }: { token: string }) {
                   </button>
                 </TableCell>
                 <TableCell className="text-right">
-                  <Link 
-                    href={`/dashboard/configs/${config.id}`}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-md hover:bg-slate-200 hover:text-slate-900 transition-colors dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 dark:hover:text-white"
-                  >
-                    <Edit2 size={14} />
-                    Edit
-                  </Link>
+                  <div className="flex justify-end items-center gap-2">
+                    <Link 
+                      href={`/dashboard/configs/${config.id}`}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-md hover:bg-slate-200 hover:text-slate-900 transition-colors dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 dark:hover:text-white"
+                    >
+                      <Edit2 size={14} />
+                      Edit
+                    </Link>
+                    <button
+                      onClick={() => deleteConfig(config.id)}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 rounded-md hover:bg-red-100 hover:text-red-700 transition-colors dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 dark:hover:text-red-300"
+                    >
+                      <Trash2 size={14} />
+                      Delete
+                    </button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}

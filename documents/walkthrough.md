@@ -681,3 +681,24 @@ Moving directly to **Phase 19 (Chat Widget Component)** as requested next.
 - Verify the Lead Detail View renders perfectly with the two-column layout.
 - Review the transcript on the right to ensure user messages are blue (right-aligned) and AI messages are gray (left-aligned).
 - Hover over the extracted data confidence dots to verify tooltips and color accuracy.
+
+
+# Phase 25: Admin Configuration Console
+
+**Goal**: A non-technical admin interface to create, edit, and preview AI Agents dynamically.
+
+**What was completed**:
+1. **Live Preview API**: Built `POST /industry-configs/preview` to safely generate a live AI greeting and qualification prompt using an *unsaved* draft configuration payload.
+2. **Configuration List**: Built `/dashboard/configs` table showing all industry configs with active/inactive status toggles (which hit `PATCH /industry-configs/:id/status`).
+3. **Configuration Editor**:
+   - Built the massive `ConfigEditor` client component utilizing `useReducer` to seamlessly keep scoring rules in sync when qualification field keys are renamed.
+   - Enforced client-side schema validation via Zod (`ConfigFormSchema`) catching missing fields before calling the API.
+   - Integrated the "Live Preview" sidebar using our beautiful `MessageBubble` styling to test the unsaved persona response directly in the browser.
+4. **Versioning Integration**: Wired up the save logic to intelligently detect when the backend creates a *new version* (returns `versioned: true`) and dynamically pushes the router to the new `/dashboard/configs/[newId]` path so admins aren't left editing an outdated ID.
+
+**Verification**:
+- Navigate to `/dashboard/configs`.
+- Create a **New Configuration** or **Edit** an existing one.
+- Add a new Qualification Field and verify that it immediately becomes available in the Scoring Rules dropdown.
+- Click **Live Preview** and confirm it generates a response matching your persona and tone.
+- Ensure clicking **Save** gracefully persists the changes and handles the version redirection.
