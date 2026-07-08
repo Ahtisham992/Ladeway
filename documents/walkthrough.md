@@ -568,7 +568,7 @@ Phase 16 hardened the IndustryConfig APIs to ensure they are production-ready fo
 
 ---
 
-## Phase 18: Design System & Shared UI Components
+# Phase 18: Design System & Shared UI Components
 
 **Goal**: Establish the foundational design tokens, typography, and base component library for the Next.js frontend to ensure every screen matches the premium design specification exactly.
 
@@ -586,7 +586,7 @@ Moving directly to **Phase 19 (Chat Widget Component)** as requested next.
 
 ---
 
-## Phase 19: Chat Widget Component
+# Phase 19: Chat Widget Component
 
 **Goal**: Build a production-quality, professionally designed customer-facing chat interface that consumes the NestJS SSE streaming endpoint reliably.
 
@@ -601,7 +601,7 @@ Moving directly to **Phase 19 (Chat Widget Component)** as requested next.
 
 ---
 
-## Phase 20: Conversation Start Flow & Session Management
+# Phase 20: Conversation Start Flow & Session Management
 
 **Goal**: Orchestrate the conversational session lifecycle logic, allowing conversations to be initiated cleanly, persisted across tabs using `sessionStorage`, and seamlessly restarted if expired.
 
@@ -616,7 +616,7 @@ Moving directly to **Phase 19 (Chat Widget Component)** as requested next.
 
 ---
 
-## Phase 21: Multi-Industry Demo Landing Page
+# Phase 21: Multi-Industry Demo Landing Page
 
 **Goal**: Construct a polished, high-converting root landing page that dynamically showcases all available industry demonstrations using a robust server-side architecture.
 
@@ -628,3 +628,35 @@ Moving directly to **Phase 19 (Chat Widget Component)** as requested next.
 5. **Core Value Proposition**: Injected the requested messaging immediately below the grid: *"Same AI engine. Different industries. Configured entirely through data — no code changes."*
 
 **Verification**: Ran `npm run type-check` cleanly. The page securely consumes environment variables and constructs proper Next.js routing patterns.
+
+# Phase 22: Conversation Completion UI
+
+**Goal**: When qualification is complete, the customer sees a professional, personalised confirmation.
+
+**What was completed**:
+1. **Synchronous Lead Creation**: Modified `conversation.service.ts` to `await` the Lead Creation synchronously when `nextAction === CLOSE_CONVERSATION`.
+2. **String Transformation**: Parsed the LLM-generated Lead Summary (written in the third person) into a professional, first-person confirmation message (e.g. "We've noted that you... A member of our team will be in touch with you shortly.") using regex, completely avoiding an additional LLM token cost.
+3. **SSE Payload Injection**: The backend now pushes the completed `Lead`'s `tier`, `confirmationMessage`, and `status: SCORED` within the final `event: done` stream payload.
+4. **ChatWidget Replacement**: The frontend captures the confirmation payload and replaces the `<form>` textarea with a premium, dynamic Completion Panel, styled correctly according to the user's `tier` (`HOT` = Green, `WARM` = Yellow, `COLD` = Slate).
+
+**Verification**:
+- Verify the conversation closes smoothly and the input panel instantly vanishes.
+- Verify the Completion Panel correctly renders the CheckCircle and dynamic styling.
+- Verify the generated `confirmationMessage` accurately reflects the summary without grammar issues.
+
+# Phase 23: Sales Rep Dashboard
+
+**Goal**: Sales reps have a single, efficient interface to view, prioritise, and act on all incoming qualified leads.
+
+**What was completed**:
+1. **Backend Endpoints**: Created `LeadController` exposing `GET /leads`, `GET /leads/:id`, and `PATCH /leads/:id`. The list endpoint correctly aggregates the `industryName` from the related config.
+2. **Persistent Admin Layout**: Implemented `apps/web/app/dashboard/layout.tsx` and the `Sidebar` component using the premium Navy background (`bg-primary`), Lucide icons, and Next.js routing.
+3. **Pipeline Table**: Constructed the `LeadPipeline` client component leveraging our existing UI `Table`. It displays Contact Name, Industry, Truncated Summary, Tier, Status, Date, and Actions.
+4. **CRM Functionality**: 
+   - **Real-time**: Implemented a 30-second polling interval (with strict component unmount cleanup) and a manual Refresh button.
+   - **Status Management**: Sales reps can now use the inline dropdown to change lead status across `NEW`, `CONTACTED`, `QUALIFIED`, `WON`, and `LOST` with an immediate PATCH and localized loading spinner. `TRANSFERRED` is locked to read-only logic.
+
+**Verification**:
+- Log into the dashboard and verify the new Navy sidebar and active route highlighting.
+- Check the Leads table and verify it fetches and renders correctly.
+- Test changing a status inline and confirm the spinner appears and the backend successfully patches the record.
