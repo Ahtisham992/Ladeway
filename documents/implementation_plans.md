@@ -1189,3 +1189,46 @@ If there are more than two active configurations returned from the API, we can e
 2. Confirm the page loads instantly (Server Component) and correctly displays cards for the seeded configs.
 3. Verify the "Start Conversation" button correctly links to `/chat/<actual-config-id>`.
 4. Run the E2E script `test-config-crud.ts` to add a new config, refresh the landing page, and verify the new card automatically appears in the UI.
+
+
+# Phase 22: Conversation Completion UI
+
+You are absolutely right—my apologies for hallucinating Phase 22 from the incorrect prior context! We are building the **Conversation Completion UI**, ensuring the customer gets a professional, personalized confirmation instead of a dead end.
+
+## Goal
+When qualification is complete, the customer sees a personalized confirmation (generated from their Lead summary). The input bar is disabled, replaced with a clear completion indicator, and the UI visually distinguishes the completed state.
+
+## Open Questions
+
+> [!NOTE]
+> Currently, the backend creates the `Lead` (and its LLM-generated summary) **asynchronously** after the conversation closes. To send a confirmation message based on that summary, we must either:
+> 1. Make Lead creation **synchronous** at the end of the conversation (which adds 2-3 seconds to the final response time as it generates the summary and the confirmation).
+> 2. Expose a new endpoint to poll for the confirmation message once the chat is closed.
+> **I recommend Option 1** for simplicity, as the user has already finished typing and waiting 2 seconds for a final summary is a natural UX pattern. Do you agree?
+
+## Proposed Changes
+
+### 1. Backend (`apps/api`)
+
+#### [MODIFY] `apps/api/src/conversation/conversation.service.ts`
+- When `nextAction === CLOSE_CONVERSATION`, change the new status to `SCORED`.
+- `await` the `LeadService` to generate the Lead and its summary synchronously instead of `.catch()` asynchronously.
+- Generate a customer-facing confirmation message using the new summary.
+- Yield the confirmation message in the `event: done` JSON payload: `{"_done": true, "status": "SCORED", "confirmationMessage": "..."}`.
+
+#### [MODIFY] `apps/api/src/ai/prompt.service.ts`
+- Add a new prompt method: `assembleCustomerConfirmationPrompt(summary: string)`.
+- The prompt will instruct the LLM to rewrite the 3rd-person sales summary into a professional 1st-person confirmation (e.g., "Thanks — we've noted your move from New York to London...").
+
+### 2. Frontend (`apps/web`)
+
+#### [MODIFY] `apps/web/components/chat/ChatWidget.tsx`
+- **Parse the confirmation**: Update the SSE parser to extract `data.confirmationMessage` when `event === 'done'`.
+- **Completion Indicator**: When `isComplete` becomes true, replace the `<form>` input area with a clean, branded completion indicator (e.g., "✅ Qualification Complete. A team member will be in touch.").
+- **Confirmation Bubble**: Inject the `confirmationMessage` into the `messages` array as a special `system` or `completed` message type, styled distinctly from standard AI messages (perhaps with a subtle green tint or a border) to fulfill the "visual distinction" requirement.
+
+## Verification Plan
+1. Start a new conversation for Logistics/Moving.
+2. Provide all required details (origin, destination, size, timeline) to trigger the `CLOSE_CONVERSATION` state.
+3. Verify the final SSE event contains `status: SCORED`.
+4. Verify the frontend cleanly hides the input bar and renders the personalized, LLM-generated confirmation summary in a visually distinct bubble.

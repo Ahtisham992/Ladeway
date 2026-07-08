@@ -4,7 +4,7 @@ import * as React from "react"
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
-import { SendIcon, AlertCircle } from "lucide-react"
+import { SendIcon, AlertCircle, CheckCircle } from "lucide-react"
 import { MessageBubble, type MessageProps } from "./MessageBubble"
 import { cn } from "@/lib/utils"
 
@@ -23,6 +23,7 @@ export function ChatWidget({ conversationId, sessionToken, initialMessages, onCo
   const [isStreaming, setIsStreaming] = useState(false)
   const [isComplete, setIsComplete] = useState(false)
   const [streamError, setStreamError] = useState<string | null>(null)
+  const [completionDetails, setCompletionDetails] = useState<{ message: string, tier: string, conversationId: string } | null>(null)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -105,8 +106,15 @@ export function ChatWidget({ conversationId, sessionToken, initialMessages, onCo
               }
               if (currentEvent === "done") {
                 setIsStreaming(false)
-                if (["CLOSED", "TRANSFERRED", "ABANDONED"].includes(data.status)) {
+                if (["CLOSED", "TRANSFERRED", "ABANDONED", "SCORED"].includes(data.status)) {
                   setIsComplete(true)
+                  if (data.confirmationMessage) {
+                    setCompletionDetails({
+                      message: data.confirmationMessage,
+                      tier: data.tier || 'COLD',
+                      conversationId: data.conversationId
+                    })
+                  }
                   if (onComplete) onComplete()
                 }
               }
@@ -145,23 +153,40 @@ export function ChatWidget({ conversationId, sessionToken, initialMessages, onCo
       </div>
 
       <div className="p-4 bg-white border-t border-secondary-200 shadow-sm">
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <Input
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            disabled={isStreaming || isComplete}
-            placeholder={isComplete ? "Conversation ended." : "Type your message..."}
-            className="flex-1 min-h-[44px]"
-          />
-          <Button
-            type="submit"
-            disabled={isStreaming || isComplete || !inputValue.trim()}
-            className="min-h-[44px] min-w-[44px] px-3"
-            aria-label="Send message"
-          >
-            <SendIcon size={18} />
-          </Button>
-        </form>
+        {isComplete && completionDetails ? (
+          <div className={cn("rounded-lg border p-4", {
+            'border-green-500 bg-green-50': completionDetails.tier === 'HOT',
+            'border-yellow-500 bg-yellow-50': completionDetails.tier === 'WARM',
+            'border-slate-300 bg-slate-50': completionDetails.tier === 'COLD' || !completionDetails.tier,
+          })}>
+            <div className="flex items-center gap-2 mb-2">
+              <CheckCircle className="text-green-500 w-5 h-5" />
+              <span className="font-medium text-foreground">Conversation Complete</span>
+            </div>
+            <p className="text-muted-foreground text-sm">{completionDetails.message}</p>
+            <p className="text-muted-foreground/60 text-xs mt-2">
+              Reference: {completionDetails.conversationId.slice(0, 8).toUpperCase()}
+            </p>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="flex gap-2">
+            <Input
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              disabled={isStreaming || isComplete}
+              placeholder={isComplete ? "Conversation ended." : "Type your message..."}
+              className="flex-1 min-h-[44px]"
+            />
+            <Button
+              type="submit"
+              disabled={isStreaming || isComplete || !inputValue.trim()}
+              className="min-h-[44px] min-w-[44px] px-3"
+              aria-label="Send message"
+            >
+              <SendIcon size={18} />
+            </Button>
+          </form>
+        )}
       </div>
     </div>
   )

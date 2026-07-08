@@ -568,7 +568,7 @@ Phase 16 hardened the IndustryConfig APIs to ensure they are production-ready fo
 
 ---
 
-## Phase 18: Design System & Shared UI Components
+# Phase 18: Design System & Shared UI Components
 
 **Goal**: Establish the foundational design tokens, typography, and base component library for the Next.js frontend to ensure every screen matches the premium design specification exactly.
 
@@ -586,7 +586,7 @@ Moving directly to **Phase 19 (Chat Widget Component)** as requested next.
 
 ---
 
-## Phase 19: Chat Widget Component
+# Phase 19: Chat Widget Component
 
 **Goal**: Build a production-quality, professionally designed customer-facing chat interface that consumes the NestJS SSE streaming endpoint reliably.
 
@@ -601,7 +601,7 @@ Moving directly to **Phase 19 (Chat Widget Component)** as requested next.
 
 ---
 
-## Phase 20: Conversation Start Flow & Session Management
+# Phase 20: Conversation Start Flow & Session Management
 
 **Goal**: Orchestrate the conversational session lifecycle logic, allowing conversations to be initiated cleanly, persisted across tabs using `sessionStorage`, and seamlessly restarted if expired.
 
@@ -616,7 +616,7 @@ Moving directly to **Phase 19 (Chat Widget Component)** as requested next.
 
 ---
 
-## Phase 21: Multi-Industry Demo Landing Page
+# Phase 21: Multi-Industry Demo Landing Page
 
 **Goal**: Construct a polished, high-converting root landing page that dynamically showcases all available industry demonstrations using a robust server-side architecture.
 
@@ -628,3 +628,18 @@ Moving directly to **Phase 19 (Chat Widget Component)** as requested next.
 5. **Core Value Proposition**: Injected the requested messaging immediately below the grid: *"Same AI engine. Different industries. Configured entirely through data — no code changes."*
 
 **Verification**: Ran `npm run type-check` cleanly. The page securely consumes environment variables and constructs proper Next.js routing patterns.
+
+# Phase 22: Conversation Completion UI
+
+**Goal**: When qualification is complete, the customer sees a professional, personalised confirmation.
+
+**What was completed**:
+1. **Synchronous Lead Creation**: Modified `conversation.service.ts` to `await` the Lead Creation synchronously when `nextAction === CLOSE_CONVERSATION`.
+2. **String Transformation**: Parsed the LLM-generated Lead Summary (written in the third person) into a professional, first-person confirmation message (e.g. "We've noted that you... A member of our team will be in touch with you shortly.") using regex, completely avoiding an additional LLM token cost.
+3. **SSE Payload Injection**: The backend now pushes the completed `Lead`'s `tier`, `confirmationMessage`, and `status: SCORED` within the final `event: done` stream payload.
+4. **ChatWidget Replacement**: The frontend captures the confirmation payload and replaces the `<form>` textarea with a premium, dynamic Completion Panel, styled correctly according to the user's `tier` (`HOT` = Green, `WARM` = Yellow, `COLD` = Slate).
+
+**Verification**:
+- Verify the conversation closes smoothly and the input panel instantly vanishes.
+- Verify the Completion Panel correctly renders the CheckCircle and dynamic styling.
+- Verify the generated `confirmationMessage` accurately reflects the summary without grammar issues.

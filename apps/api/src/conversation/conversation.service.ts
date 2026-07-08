@@ -221,7 +221,7 @@ export class ConversationService {
     if (nextAction === QualificationAction.TRIGGER_TRANSFER) {
       newStatus = ConversationStatus.TRANSFERRED;
     } else if (nextAction === QualificationAction.CLOSE_CONVERSATION) {
-      newStatus = ConversationStatus.CLOSED;
+      newStatus = ConversationStatus.SCORED;
     }
 
     const updatedSession = await this.sessionService.updateSession(sessionToken, {
@@ -230,7 +230,10 @@ export class ConversationService {
     });
 
     // If terminal state, update the DB record too
-    if (newStatus === ConversationStatus.CLOSED || newStatus === ConversationStatus.TRANSFERRED) {
+    let finalLead = null;
+    let confirmationMessage = undefined;
+
+    if (newStatus === ConversationStatus.SCORED || newStatus === ConversationStatus.TRANSFERRED || newStatus === ConversationStatus.CLOSED) {
       await this.prisma.$system.conversation.update({
         where: { id: session.conversationId },
         data: {
@@ -239,10 +242,24 @@ export class ConversationService {
         },
       });
       
-      // Phase 12: Trigger Lead Creation asynchronously
-      this.leadService.createLeadFromConversation(session.conversationId).catch(err => {
+      try {
+        finalLead = await this.leadService.createLeadFromConversation(session.conversationId);
+        
+        if (newStatus === ConversationStatus.SCORED && finalLead?.summary) {
+          const rawMessage = `Thank you — ${finalLead.summary
+            .replace(/^[A-Z][a-z]+ (is|has|seeks|wants|needs)/,
+              (match: string) => `we've noted that you ${match.split(' ').slice(1).join(' ')}`)
+            .toLowerCase()
+            .replace(/^./, (c: string) => c.toUpperCase())
+          }. A member of our team will be in touch with you shortly.`;
+
+          confirmationMessage = rawMessage.length > 20 
+            ? rawMessage 
+            : `Thank you — a member of our team will be in touch with you shortly.`;
+        }
+      } catch (err: any) {
         this.logger.error(`Failed to create lead for conversation ${session.conversationId}`, err.stack);
-      });
+      }
     }
 
     // Yield a final JSON chunk so the controller can send the `event: done` with state
@@ -250,6 +267,9 @@ export class ConversationService {
       _done: true,
       status: updatedSession!.status,
       turnCount: updatedSession!.turnCount,
+      confirmationMessage,
+      conversationId: session.conversationId,
+      tier: finalLead?.tier || undefined
     });
   }
 
