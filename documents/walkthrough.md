@@ -643,3 +643,20 @@ Moving directly to **Phase 19 (Chat Widget Component)** as requested next.
 - Verify the conversation closes smoothly and the input panel instantly vanishes.
 - Verify the Completion Panel correctly renders the CheckCircle and dynamic styling.
 - Verify the generated `confirmationMessage` accurately reflects the summary without grammar issues.
+
+# Phase 23: Sales Rep Dashboard
+
+**Goal**: Sales reps have a single, efficient interface to view, prioritise, and act on all incoming qualified leads.
+
+**What was completed**:
+1. **Backend Endpoints**: Created `LeadController` exposing `GET /leads`, `GET /leads/:id`, and `PATCH /leads/:id`. The list endpoint correctly aggregates the `industryName` from the related config.
+2. **Persistent Admin Layout**: Implemented `apps/web/app/dashboard/layout.tsx` and the `Sidebar` component using the premium Navy background (`bg-primary`), Lucide icons, and Next.js routing.
+3. **Pipeline Table**: Constructed the `LeadPipeline` client component leveraging our existing UI `Table`. It displays Contact Name, Industry, Truncated Summary, Tier, Status, Date, and Actions.
+4. **CRM Functionality**: 
+   - **Real-time**: Implemented a 30-second polling interval (with strict component unmount cleanup) and a manual Refresh button.
+   - **Status Management**: Sales reps can now use the inline dropdown to change lead status across `NEW`, `CONTACTED`, `QUALIFIED`, `WON`, and `LOST` with an immediate PATCH and localized loading spinner. `TRANSFERRED` is locked to read-only logic.
+
+**Verification**:
+- Log into the dashboard and verify the new Navy sidebar and active route highlighting.
+- Check the Leads table and verify it fetches and renders correctly.
+- Test changing a status inline and confirm the spinner appears and the backend successfully patches the record.

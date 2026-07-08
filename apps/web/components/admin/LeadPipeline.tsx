@@ -6,7 +6,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
 
 export function LeadPipeline({ token }: { token: string }) {
   const [leads, setLeads] = useState<any[]>([]);
@@ -174,7 +173,13 @@ export function LeadPipeline({ token }: { token: string }) {
                   )}
                 </TableCell>
                 <TableCell className="text-sm text-slate-500 whitespace-nowrap">
-                  {format(new Date(lead.createdAt), 'MMM d, h:mm a')}
+                  {new Date(lead.createdAt).toLocaleString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true,
+                  })}
                 </TableCell>
               </TableRow>
             ))}
