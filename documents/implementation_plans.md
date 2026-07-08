@@ -1232,3 +1232,52 @@ When qualification is complete, the customer sees a personalized confirmation (g
 2. Provide all required details (origin, destination, size, timeline) to trigger the `CLOSE_CONVERSATION` state.
 3. Verify the final SSE event contains `status: SCORED`.
 4. Verify the frontend cleanly hides the input bar and renders the personalized, LLM-generated confirmation summary in a visually distinct bubble.
+
+
+# Phase 23: Sales Rep Dashboard
+
+The goal of this phase is to build the core CRM interface for Sales Reps to view, prioritize, and manage qualified leads.
+
+## User Review Required
+
+> [!IMPORTANT]
+> The backend currently lacks a dedicated `/leads` controller to list and update leads. We will need to create this controller before building the frontend dashboard. I've designed a polling mechanism (every 30 seconds) for the dashboard as specified, to ensure reps see new leads instantly without manual refreshes.
+
+## Open Questions
+
+> [!NOTE]
+> 1. Should Sales Reps only be able to view leads that belong to their specific `tenantId`, or is there a need for a global admin view? (I will implement strict tenant isolation by default).
+> 2. What are the allowed Lead statuses for the `PATCH /leads/:id` endpoint? I will default to `['NEW', 'CONTACTED', 'QUALIFIED', 'LOST']` unless you specify otherwise.
+
+## Proposed Changes
+
+### 1. Backend API (`apps/api/src/lead`)
+
+#### [NEW] `apps/api/src/lead/lead.controller.ts`
+- Create a new NestJS controller with standard JWT authentication and `REP` or `ADMIN` role guarding.
+- **`GET /leads`**: Returns a list of leads for the authenticated tenant. Supports query parameters for filtering (`tier`, `status`) and sorting (`sortBy=date|score`, `order=asc|desc`). Includes related `conversation.config` to display the Industry name.
+- **`PATCH /leads/:id`**: Allows updating the `status` of a lead directly from the table inline.
+
+#### [MODIFY] `apps/api/src/lead/lead.module.ts`
+- Register the new `LeadController`.
+
+### 2. Frontend Dashboard (`apps/web`)
+
+#### [NEW] `apps/web/app/dashboard/layout.tsx` & `Sidebar.tsx`
+- We need to establish the persistent layout for the dashboard with navigation links (Dashboard/Leads vs Analytics). *Note: We planned this in my previous misinterpretation, but we still need to build it now so the table has a home.*
+
+#### [MODIFY] `apps/web/app/dashboard/page.tsx`
+- Build the Lead Pipeline Table component.
+- **Columns**: Contact Name, Industry, Summary (truncated), Tier Badge, Status (editable dropdown), Date, Actions.
+- **Filtering & Sorting**: Add UI controls to filter by Tier/Status and sort columns.
+- **Polling**: Implement a React `useEffect` interval to fetch `GET /leads` every 30 seconds, automatically appending new leads to the UI.
+
+#### [NEW] `apps/web/components/ui/Table.tsx`
+- Create a polished, premium Next.js table component matching the Ladeway design system.
+
+## Verification Plan
+1. Create a dummy lead via the chat widget.
+2. Log into the Dashboard as a `REP`.
+3. Verify the new lead automatically appears in the pipeline table within 30 seconds.
+4. Test filtering by `HOT` tier to ensure the table correctly isolates high-value leads.
+5. Change the lead's status to `CONTACTED` inline and verify the backend correctly persists the patch.
