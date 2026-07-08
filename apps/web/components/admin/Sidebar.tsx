@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, Briefcase, Settings, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, Briefcase, Settings, LogOut, BarChart2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { logout } from '@/app/login/actions';
 
@@ -11,6 +11,7 @@ export function Sidebar() {
 
   const links = [
     { name: 'Overview', href: '/dashboard/overview', icon: LayoutDashboard },
+    { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart2 },
     { name: 'Leads', href: '/dashboard', icon: Users },
     { name: 'Configurations', href: '/dashboard/configs', icon: Briefcase },
     { name: 'Settings', href: '/dashboard/settings', icon: Settings },

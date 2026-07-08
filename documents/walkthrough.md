@@ -702,3 +702,23 @@ Moving directly to **Phase 19 (Chat Widget Component)** as requested next.
 - Add a new Qualification Field and verify that it immediately becomes available in the Scoring Rules dropdown.
 - Click **Live Preview** and confirm it generates a response matching your persona and tone.
 - Ensure clicking **Save** gracefully persists the changes and handles the version redirection.
+
+
+# Phase 26: Analytics Dashboard
+
+**Goal**: Provide a high-level analytics overview of the AI agent's performance, lead qualification rates, and conversation volumes over the last 30 days.
+
+**What was completed**:
+1. **Analytics Summary Page**: Built the `AnalyticsPage` server component that fetches summary metrics and time-series data seamlessly from the `AnalyticsService` backend.
+2. **Tailwind Chart Visualisations**: Removed third-party charting libraries (Recharts) to keep the bundle size completely optimal. Implemented responsive, interactive, pure Tailwind CSS charts for:
+   - **Conversation Volume**: A vertical bar chart with relative percentage scaling and hover tooltips for daily counts.
+   - **Lead Tier Distribution**: A horizontal stacked bar visualizing the ratio of HOT, WARM, and COLD leads.
+   - **Lead Funnel**: A simple funnel progress bar showcasing the Conversion Rate.
+3. **Industry Breakdown**: Integrated the reusable Phase 18 `Table` component to map conversion rates, lead counts, and conversation volumes directly to their underlying Industry Configurations.
+4. **Navigation Integration**: Hooked the new Analytics route directly into the Admin Sidebar.
+
+**Verification**:
+- Navigate to the **Admin Console** and click the **Analytics** tab in the sidebar.
+- Ensure the **Total Conversations** and **Qualified Leads** metrics properly sum up the seeded values in the database.
+- Hover over the daily Volume bars and Tier distributions to verify the raw counts are rendered via native tooltips.
+- Validate that the dashboard fully respects Dark Mode color semantics.

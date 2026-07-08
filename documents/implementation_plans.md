@@ -1359,3 +1359,44 @@ The goal of this phase is to provide a non-technical admin interface to create, 
 2. Click into the Logistics config and add a new Qualification Field ("Preferred Contact Time").
 3. Click "Live Preview" to verify the backend successfully generates a prompt incorporating the new field.
 4. Save the configuration and verify the backend persists it accurately without errors.
+
+
+
+# Phase 26: Analytics Dashboard
+
+The goal of this phase is to provide the Tenant Admin with a high-level overview of their AI agent's performance, lead qualification rates, and conversation volumes over the last 30 days.
+
+## User Review Required
+
+> [!NOTE]
+> The plan has been approved with the following modifications:
+> 1. **Time Range**: Hardcoded 30-day default. No date picker needed.
+> 2. **Charts**: Do NOT use recharts or any chart library. All visualisations must use pure Tailwind CSS `div` elements to reduce bundle size and dependencies.
+
+## Proposed Changes
+
+### 1. Frontend Analytics Dashboard
+
+#### [NEW] `apps/web/app/dashboard/analytics/page.tsx`
+- A Server Component that securely fetches data from `GET /analytics/summary` and `GET /analytics/conversations`.
+- Automatically calculates the last 30 days date range to pass to the API queries.
+- Renders the 4 core Summary Cards:
+  - **Total Conversations**: `totalConversations`
+  - **Qualified Leads**: `totalLeads`
+  - **Hot Lead Rate**: `(hotLeads / totalLeads) * 100`%
+  - **Avg. Conversation Length**: `averageTurnCount` messages/conv
+
+### 2. Chart Visualizations
+
+#### [NEW] `apps/web/components/admin/AnalyticsCharts.tsx`
+- Pure Tailwind CSS components (no chart libraries).
+- **Lead Tier Distribution (Stacked Bar)**: A horizontal stacked bar using `div` elements with flexbox and percentages.
+- **Conversation Volume (Vertical Bar Chart)**: A time-series bar chart using vertical `div` elements with height percentages.
+- **Industry Breakdown**: Uses the existing `Table` component from Phase 18.
+- **Lead Funnel**: A simple horizontal stacked bar, similar to the tier distribution.
+
+## Verification Plan
+1. Navigate to `/dashboard/analytics`.
+2. Verify the 4 summary cards correctly display aggregated data based on the seeded conversations.
+3. Verify the Lead Tier Distribution chart renders without errors and strictly uses the Navy/Slate color palette.
+4. Verify the Time-Series chart successfully graphs the historical conversation volume trend.
