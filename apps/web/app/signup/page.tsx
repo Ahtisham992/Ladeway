@@ -11,7 +11,7 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 ${
+      className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary/20 transition-all duration-200 ${
         pending ? 'opacity-75 cursor-not-allowed' : ''
       }`}
     >
@@ -38,43 +38,41 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-background flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md animate-fade-in-up">
-        <div className="flex justify-center">
-          <div className="w-16 h-16 bg-indigo-500 rounded-2xl shadow-xl flex items-center justify-center transform rotate-12 hover:rotate-0 transition-transform duration-300">
-            <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
+        <div className="flex justify-center mb-8">
+          <div className="w-72 h-20 overflow-hidden flex items-center justify-center rounded-xl bg-white shadow-sm border border-border">
+            <img src="/logo.png" alt="Ladeway Logo" className="w-[120%] h-auto object-cover" />
           </div>
         </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-white tracking-tight">
+        <h2 className="mt-6 text-center text-3xl font-bold text-primary tracking-tight">
           Start your Ladeway journey
         </h2>
-        <p className="mt-2 text-center text-sm text-gray-400">
+        <p className="mt-2 text-center text-sm text-secondary">
           Deploy your first AI agent in minutes
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md animate-fade-in-up" style={{ animationDelay: '100ms' }}>
-        <div className="bg-gray-800 py-8 px-4 shadow-2xl sm:rounded-2xl sm:px-10 border border-gray-700/50 backdrop-blur-xl">
+        <div className="bg-white py-8 px-4 shadow-sm sm:rounded-lg sm:px-10 border border-border">
           <form className="space-y-6" action={clientAction}>
             {error && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 animate-shake">
+              <div className="bg-error/10 border border-error/20 rounded-lg p-4 animate-shake">
                 <div className="flex">
                   <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <svg className="h-5 w-5 text-error" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                     </svg>
                   </div>
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-red-400">{error}</p>
+                    <p className="text-sm font-medium text-error">{error}</p>
                   </div>
                 </div>
               </div>
             )}
 
             <div>
-              <label htmlFor="companyName" className="block text-sm font-medium text-gray-300">
+              <label htmlFor="companyName" className="block text-sm font-medium text-secondary">
                 Company Name
               </label>
               <div className="mt-1">
@@ -83,14 +81,14 @@ export default function SignupPage() {
                   name="companyName"
                   type="text"
                   required
-                  className="appearance-none block w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-lg shadow-sm placeholder-gray-500 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
+                  className="appearance-none block w-full px-4 py-3 bg-white border border-border rounded-lg shadow-sm placeholder-secondary-light text-gray-900 focus:outline-none focus:ring-primary/20 focus:border-primary transition-all duration-200"
                   placeholder="Acme Corp"
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="subdomain" className="block text-sm font-medium text-gray-300">
+              <label htmlFor="subdomain" className="block text-sm font-medium text-secondary">
                 Workspace Subdomain
               </label>
               <div className="mt-1 flex rounded-lg shadow-sm">
@@ -99,17 +97,17 @@ export default function SignupPage() {
                   name="subdomain"
                   type="text"
                   required
-                  className="appearance-none block w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-l-lg placeholder-gray-500 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
+                  className="appearance-none block w-full px-4 py-3 bg-white border border-border rounded-l-lg placeholder-secondary-light text-gray-900 focus:outline-none focus:ring-primary/20 focus:border-primary transition-all duration-200"
                   placeholder="acme"
                 />
-                <span className="inline-flex items-center px-4 rounded-r-lg border border-l-0 border-gray-600 bg-gray-800 text-gray-400 text-sm">
+                <span className="inline-flex items-center px-4 rounded-r-lg border border-l-0 border-border bg-surface text-secondary text-sm">
                   .ladeway.com
                 </span>
               </div>
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-300">
+              <label htmlFor="email" className="block text-sm font-medium text-secondary">
                 Admin Email address
               </label>
               <div className="mt-1">
@@ -119,14 +117,14 @@ export default function SignupPage() {
                   type="email"
                   autoComplete="email"
                   required
-                  className="appearance-none block w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-lg shadow-sm placeholder-gray-500 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
+                  className="appearance-none block w-full px-4 py-3 bg-white border border-border rounded-lg shadow-sm placeholder-secondary-light text-gray-900 focus:outline-none focus:ring-primary/20 focus:border-primary transition-all duration-200"
                   placeholder="admin@acme.com"
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-300">
+              <label htmlFor="password" className="block text-sm font-medium text-secondary">
                 Password
               </label>
               <div className="mt-1">
@@ -136,7 +134,7 @@ export default function SignupPage() {
                   type="password"
                   autoComplete="new-password"
                   required
-                  className="appearance-none block w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-lg shadow-sm placeholder-gray-500 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
+                  className="appearance-none block w-full px-4 py-3 bg-white border border-border rounded-lg shadow-sm placeholder-secondary-light text-gray-900 focus:outline-none focus:ring-primary/20 focus:border-primary transition-all duration-200"
                   placeholder="••••••••"
                 />
               </div>
@@ -146,9 +144,9 @@ export default function SignupPage() {
               <SubmitButton />
             </div>
             
-            <div className="text-center mt-4 text-sm text-gray-400">
+            <div className="text-center mt-4 text-sm text-secondary">
               Already have an account?{' '}
-              <Link href="/login" className="font-medium text-indigo-400 hover:text-indigo-300 transition-colors">
+              <Link href="/login" className="font-medium text-primary hover:text-primary-dark transition-colors">
                 Sign in
               </Link>
             </div>

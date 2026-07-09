@@ -143,7 +143,7 @@ export function ChatWidget({ conversationId, sessionToken, initialMessages, onCo
         ))}
         {streamError && (
           <div className="flex justify-center my-4">
-            <div className="inline-flex items-center text-sm text-red-600 bg-red-50 px-3 py-1.5 rounded-full border border-red-200">
+            <div className="inline-flex items-center text-sm text-error bg-error/10 px-3 py-1.5 rounded-full border border-error/20">
               <AlertCircle size={16} className="mr-2" />
               {streamError}
             </div>
@@ -152,15 +152,15 @@ export function ChatWidget({ conversationId, sessionToken, initialMessages, onCo
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="p-4 bg-white border-t border-secondary-200 shadow-sm">
+      <div className="p-4 bg-white border-t border-border shadow-sm">
         {isComplete && completionDetails ? (
           <div className={cn("rounded-lg border p-4", {
-            'border-green-500 bg-green-50': completionDetails.tier === 'HOT',
-            'border-yellow-500 bg-yellow-50': completionDetails.tier === 'WARM',
-            'border-slate-300 bg-slate-50': completionDetails.tier === 'COLD' || !completionDetails.tier,
+            'border-success/20 bg-success/10': completionDetails.tier === 'HOT',
+            'border-warning/20 bg-warning/10': completionDetails.tier === 'WARM',
+            'border-border bg-surface': completionDetails.tier === 'COLD' || !completionDetails.tier,
           })}>
             <div className="flex items-center gap-2 mb-2">
-              <CheckCircle className="text-green-500 w-5 h-5" />
+              <CheckCircle className="text-success w-5 h-5" />
               <span className="font-medium text-foreground">Conversation Complete</span>
             </div>
             <p className="text-muted-foreground text-sm">{completionDetails.message}</p>

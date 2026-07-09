@@ -19,7 +19,7 @@ export function MessageBubble({ message }: { message: MessageProps }) {
           "max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed",
           isUser
             ? "bg-primary text-white rounded-tr-sm"
-            : "bg-secondary-50 text-secondary-900 rounded-tl-sm shadow-sm border border-secondary-100"
+            : "bg-white text-gray-900 rounded-tl-sm shadow-sm border border-border"
         )}
       >
         {isTyping ? <TypingIndicator /> : <span className="whitespace-pre-wrap">{message.content}</span>}

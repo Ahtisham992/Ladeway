@@ -16,13 +16,26 @@
 @layer base {
   :root {
     --color-primary: #1F4E79;
+    --color-primary-light: #2E75B6;
+    --color-primary-dark: #163A5F;
     --color-secondary: #64748B;
+    --color-secondary-light: #94A3B8;
     --color-background: #FAFAF9;
+    --color-surface: #FFFFFF;
+    --color-surface-alt: #F1F5F9;
     --color-accent: #B45309;
     --color-success: #15803D;
     --color-warning: #B45309;
-    --color-neutral: #64748B;
+    --color-error: #DC2626;
+    --color-border: #E2E8F0;
     --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  button, a, input, select, textarea, [role="button"] {
+    transition: color 150ms ease, 
+                background-color 150ms ease,
+                border-color 150ms ease,
+                box-shadow 150ms ease;
   }
 
   html {
@@ -62,6 +75,6 @@
 @layer components {
   /* Transition utility — enforces 150ms ease spec-wide */
   .transition-default {
-    @apply transition-all duration-150 ease-in-out;
+    transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
   }
 }

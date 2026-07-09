@@ -11,9 +11,7 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 ${
-        pending ? 'opacity-75 cursor-not-allowed' : ''
-      }`}
+      className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary/20 transition-all duration-200 ${pending ? 'opacity-75 cursor-not-allowed' : ''}`}
     >
       {pending ? (
         <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -38,49 +36,46 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-background flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md animate-fade-in-up">
-        <div className="flex justify-center">
-          <div className="w-16 h-16 bg-indigo-500 rounded-2xl shadow-xl flex items-center justify-center transform rotate-12 hover:rotate-0 transition-transform duration-300">
-            <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
+        <div className="flex justify-center mb-8">
+          <div className="w-72 h-20 overflow-hidden flex items-center justify-center rounded-xl bg-white shadow-sm border border-border">
+            <img src="/logo.png" alt="Ladeway Logo" className="w-[120%] h-auto object-cover" />
           </div>
         </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-white tracking-tight">
+        <h2 className="mt-6 text-center text-3xl font-bold text-primary tracking-tight">
           Welcome back to Ladeway
         </h2>
-        <p className="mt-2 text-center text-sm text-gray-400">
+        <p className="mt-2 text-center text-sm text-secondary">
           Sign in to access your dashboard
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md animate-fade-in-up" style={{ animationDelay: '100ms' }}>
-        <div className="bg-gray-800 py-8 px-4 shadow-2xl sm:rounded-2xl sm:px-10 border border-gray-700/50 backdrop-blur-xl">
+        <div className="bg-white py-8 px-4 shadow-sm sm:rounded-lg sm:px-10 border border-border">
           <form className="space-y-6" action={clientAction}>
-            
             {error && (
-              <div className="rounded-md bg-red-900/50 p-4 border border-red-500/50">
+              <div className="rounded-md bg-error/10 p-4 border border-error/20">
                 <div className="flex">
                   <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <svg className="h-5 w-5 text-error" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                     </svg>
                   </div>
                   <div className="ml-3">
-                    <h3 className="text-sm font-medium text-red-300">{error}</h3>
+                    <h3 className="text-sm font-medium text-error">{error}</h3>
                   </div>
                 </div>
               </div>
             )}
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-300">
+              <label htmlFor="email" className="block text-sm font-medium text-secondary">
                 Email address
               </label>
               <div className="mt-1 relative rounded-md shadow-sm">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg className="h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <svg className="h-5 w-5 text-secondary-light" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                     <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
                     <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
                   </svg>
@@ -91,20 +86,20 @@ export default function LoginPage() {
                   type="email"
                   autoComplete="email"
                   required
-                  defaultValue="admin@logicstics.com"
-                  className="appearance-none block w-full px-3 py-3 pl-10 border border-gray-600 rounded-lg shadow-sm placeholder-gray-500 text-white bg-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors duration-200"
+                  defaultValue=""
+                  className="appearance-none block w-full px-3 py-3 pl-10 border border-border rounded-lg shadow-sm placeholder-secondary-light text-gray-900 bg-white focus:outline-none focus:ring-primary/20 focus:border-primary sm:text-sm transition-colors duration-200"
                   placeholder="you@example.com"
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-300">
+              <label htmlFor="password" className="block text-sm font-medium text-secondary">
                 Password
               </label>
               <div className="mt-1 relative rounded-md shadow-sm">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg className="h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <svg className="h-5 w-5 text-secondary-light" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
                   </svg>
                 </div>
@@ -114,8 +109,8 @@ export default function LoginPage() {
                   type="password"
                   autoComplete="current-password"
                   required
-                  defaultValue="password"
-                  className="appearance-none block w-full px-3 py-3 pl-10 border border-gray-600 rounded-lg shadow-sm placeholder-gray-500 text-white bg-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors duration-200"
+                  defaultValue=""
+                  className="appearance-none block w-full px-3 py-3 pl-10 border border-border rounded-lg shadow-sm placeholder-secondary-light text-gray-900 bg-white focus:outline-none focus:ring-primary/20 focus:border-primary sm:text-sm transition-colors duration-200"
                   placeholder="••••••••"
                 />
               </div>
@@ -127,15 +122,15 @@ export default function LoginPage() {
                   id="remember-me"
                   name="remember-me"
                   type="checkbox"
-                  className="h-4 w-4 text-indigo-500 focus:ring-indigo-500 border-gray-600 rounded bg-gray-900"
+                  className="h-4 w-4 text-primary focus:ring-primary/20 border-border rounded bg-white"
                 />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-400">
+                <label htmlFor="remember-me" className="ml-2 block text-sm text-secondary">
                   Remember me
                 </label>
               </div>
 
               <div className="text-sm">
-                <a href="#" className="font-medium text-indigo-400 hover:text-indigo-300 transition-colors">
+                <a href="#" className="font-medium text-primary hover:text-primary-dark transition-colors">
                   Forgot your password?
                 </a>
               </div>
@@ -145,17 +140,18 @@ export default function LoginPage() {
               <SubmitButton />
             </div>
 
-            <div className="text-center mt-4 text-sm text-gray-400">
+            <div className="text-center mt-4 text-sm text-secondary">
               Don't have an account?{' '}
-              <Link href="/signup" className="font-medium text-indigo-400 hover:text-indigo-300 transition-colors">
+              <Link href="/signup" className="font-medium text-primary hover:text-primary-dark transition-colors">
                 Sign up
               </Link>
             </div>
           </form>
         </div>
       </div>
-      
-      <style dangerouslySetInnerHTML={{__html: `
+
+      <style dangerouslySetInnerHTML={{
+        __html: `
         @keyframes fadeInUp {
           from { opacity: 0; transform: translateY(20px); }
           to { opacity: 1; transform: translateY(0); }

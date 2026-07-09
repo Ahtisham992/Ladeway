@@ -19,24 +19,26 @@ export function Sidebar() {
 
   return (
     <div className="w-64 bg-primary text-white flex flex-col min-h-screen">
-      <div className="p-6">
-        <h2 className="text-2xl font-bold tracking-tight">Ladeway</h2>
-        <p className="text-primary-foreground/70 text-xs mt-1">Admin Console</p>
+      <div className="px-6 py-8">
+        <div className="w-full h-12 overflow-hidden flex items-center justify-center bg-white rounded-lg p-1 shadow-sm mb-2">
+          <img src="/logo.png" alt="Ladeway" className="w-[120%] h-auto object-cover" />
+        </div>
+        <p className="text-primary-foreground/70 text-xs font-medium uppercase tracking-widest mt-3">Admin Console</p>
       </div>
 
       <nav className="flex-1 px-4 space-y-2 mt-4">
         {links.map((link) => {
           const Icon = link.icon;
           const isActive = pathname === link.href || (link.href !== '/dashboard' && pathname?.startsWith(link.href));
-          
+
           return (
             <Link
               key={link.name}
               href={link.href}
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                isActive 
-                  ? "bg-white/20 text-white" 
+                isActive
+                  ? "bg-white/20 text-white"
                   : "text-white/70 hover:bg-white/10 hover:text-white"
               )}
             >
