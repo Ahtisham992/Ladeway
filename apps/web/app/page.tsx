@@ -3,32 +3,38 @@ export const dynamic = 'force-dynamic';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Building2, ArrowRight } from 'lucide-react';
+import { Bot, MessageSquare, ArrowRight, Building2 } from 'lucide-react';
 
-interface Tenant {
-  id: string;
+interface TenantInfo {
   name: string;
   subdomain: string;
-  createdAt: string;
 }
 
-async function getTenants(): Promise<{ tenants: Tenant[], error: boolean }> {
+interface IndustryConfig {
+  id: string;
+  industryName: string;
+  personaName: string;
+  greeting?: string;
+  tenant?: TenantInfo;
+}
+
+async function getConfigs(): Promise<{ configs: IndustryConfig[], error: boolean }> {
   const apiUrl = process.env.API_URL || 'http://localhost:3001';
   
   try {
-    const res = await fetch(`${apiUrl}/tenants/public`, { cache: 'no-store' });
+    const res = await fetch(`${apiUrl}/industry-configs/public`, { cache: 'no-store' });
     if (!res.ok) {
-      return { tenants: [], error: true };
+      return { configs: [], error: true };
     }
     const data = await res.json();
-    return { tenants: data, error: false };
+    return { configs: data, error: false };
   } catch (err) {
-    return { tenants: [], error: true };
+    return { configs: [], error: true };
   }
 }
 
 export default async function LandingPage() {
-  const { tenants, error } = await getTenants();
+  const { configs, error } = await getConfigs();
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -60,42 +66,51 @@ export default async function LandingPage() {
           AI-Powered Lead Qualification
         </h1>
         <p className="mt-4 text-xl text-slate-500 dark:text-slate-400 max-w-2xl mx-auto">
-          Explore our network of partner companies using Ladeway's intelligent agents to automatically qualify, score, and route their inbound leads.
+          Explore the catalog of AI Agents created by our partner companies to automatically qualify, score, and route their inbound leads.
         </p>
       </div>
 
-      {/* Tenants Grid */}
+      {/* Agents Catalog Grid */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24">
         {error ? (
           <div className="text-center p-8 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl border border-red-200 dark:border-red-800">
-            Failed to load companies. Is the API server running?
+            Failed to load AI Agents. Is the API server running?
           </div>
-        ) : tenants.length === 0 ? (
+        ) : configs.length === 0 ? (
           <div className="text-center p-12 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-500">
-            No companies have joined yet. Be the first!
+            No AI Agents are currently available in the catalog. Be the first to build one!
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
-            {tenants.map(tenant => (
-              <Card key={tenant.id} className="hover:shadow-lg transition-all duration-300 hover:-translate-y-1 group">
+            {configs.map(config => (
+              <Card key={config.id} className="hover:shadow-lg transition-all duration-300 hover:-translate-y-1 group flex flex-col h-full">
                 <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <Building2 className="w-5 h-5 text-primary" />
-                      </div>
-                      <div>
-                        <CardTitle className="text-lg">{tenant.name}</CardTitle>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{tenant.subdomain}.ladeway.com</p>
-                      </div>
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-slate-400" />
+                      <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                        {config.tenant?.name || 'Unknown Company'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center shrink-0">
+                      <Bot className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg leading-tight">{config.personaName}</CardTitle>
+                      <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{config.industryName}</p>
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <Link href={`/company/${tenant.id}`} className="w-full">
+                <CardContent className="flex-1 flex flex-col justify-between">
+                  <p className="text-sm text-slate-600 dark:text-slate-300 italic mb-6 line-clamp-3 relative pl-4 border-l-2 border-indigo-200 dark:border-indigo-800">
+                    "{config.greeting}"
+                  </p>
+                  <Link href={`/chat/${config.id}`} className="w-full mt-auto">
                     <Button variant="outline" className="w-full justify-between group-hover:bg-primary group-hover:text-white group-hover:border-primary transition-colors">
-                      View AI Agents
-                      <ArrowRight className="w-4 h-4 ml-2 opacity-70" />
+                      Start Conversation
+                      <MessageSquare className="w-4 h-4 ml-2 opacity-70" />
                     </Button>
                   </Link>
                 </CardContent>

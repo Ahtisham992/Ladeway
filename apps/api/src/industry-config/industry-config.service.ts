@@ -51,7 +51,13 @@ export class IndustryConfigService {
         industryName: true,
         personaName: true,
         greeting: true,
-        tenantId: true
+        tenantId: true,
+        tenant: {
+          select: {
+            name: true,
+            subdomain: true,
+          }
+        }
       },
       orderBy: { createdAt: 'asc' }
     });
