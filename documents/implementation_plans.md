@@ -921,3 +921,602 @@ We will create a new E2E test script that simulates:
 > [!WARNING]  
 > **LLM Classifier Latency**  
 > Running an intent classification prompt before the conversational prompt adds a blocking network call to the critical path. Are you comfortable with an extra ~300ms latency for messages that trigger the classifier, or should we strictly stick to keyword-based detection with a vastly expanded dictionary?
+
+
+
+# Phase 16 — Config CRUD Hardening
+
+This phase focuses on making the `IndustryConfig` API production-ready. We must ensure that configuration data can be safely managed without breaking historical conversation records or losing context for active sessions.
+
+## Goal
+The industry config API must be robust, handle all edge cases securely, and allow full management (versioning, deactivation, deletion prevention) via the API as a prerequisite for the dashboard in Phase 25.
+
+## Proposed Changes
+
+### 1. Hardening Delete Operations
+Currently, the `IndustryConfig` model is related to `Conversation` via a foreign key (`configId`). Because we deliberately omitted `onDelete: Cascade`, attempting to delete an active config will throw a Prisma constraint error.
+- **Action**: Update the `DELETE /configs/:id` endpoint to explicitly handle this. Before attempting deletion, we will query `conversationCount`. 
+- If `conversationCount > 0`, we will reject the deletion with a `409 Conflict` and return a user-friendly message explaining that the config can only be deactivated, not deleted.
+
+### 2. Implementing Versioning & Updates (Immutability)
+Modifying an existing configuration (e.g. changing fields or scoring rules) could retroactively break the context of historical conversations that referenced that exact schema.
+- **Action**: We will modify `PUT /configs/:id` so that updating a configuration is treated as a **version bump**.
+- Instead of mutating the row, we will set `isActive: false` on the old `IndustryConfig`.
+- We will then create a brand new `IndustryConfig` row with the updated data and `isActive: true`.
+- New conversations will pick up the new active version, while old conversations will remain linked to the frozen snapshot.
+
+### 3. Implementing Config Deactivation
+- **Action**: Introduce a `PATCH /configs/:id/status` endpoint to explicitly toggle `isActive` without needing to submit a full PUT payload.
+- This allows administrators to safely halt new leads for a specific industry without destroying historical data.
+
+### 4. Config Preview Endpoint (`GET /configs/:id/preview`)
+- **Action**: Create a new endpoint that accepts a `configId` and a sample `message`. 
+- It will invoke the `LLMRouterService` using a simulated conversation context (no DB records created) and stream or return the AI's response.
+- This allows administrators to instantly test how changes to the persona or fields will affect the AI's conversational style before setting the config live.
+
+## Verification Plan
+
+### Automated Tests
+We will create a new integration test suite (`test-config-crud.ts`) that verifies:
+1. Attempting to delete a config with existing conversations yields a `409 Conflict`.
+2. Updating a config creates a new active row and deactivates the old one.
+3. The preview endpoint returns a valid AI response without creating any `Conversation`, `Message`, or `Lead` records in PostgreSQL.
+
+## Open Questions
+
+> [!NOTE]  
+> **Preview Endpoint Structure**  
+> Should the `/configs/:id/preview` endpoint be a streaming endpoint using SSE (similar to the real chat API), or a standard JSON endpoint that waits for the full text generation to simplify the frontend dashboard integration later?
+
+
+
+# Phase 17 — Analytics Data Layer
+
+This phase focuses on building the data aggregation layer required to power the admin dashboard. We will introduce an `AnalyticsModule` that queries PostgreSQL to generate key performance indicators, time-series data for charting, and funnel metrics.
+
+## Goal
+To implement a robust and efficient `AnalyticsService` capable of aggregating conversation and lead data per tenant, supporting date range filtering, and providing structured metrics for the Next.js frontend.
+
+## Proposed Changes
+
+### 1. Analytics Module Setup
+- **[NEW] `apps/api/src/analytics/analytics.module.ts`**: Standard module to encapsulate analytics logic.
+- **[NEW] `apps/api/src/analytics/analytics.controller.ts`**: Controller exposing endpoints for the frontend dashboard:
+  - `GET /analytics/summary`
+  - `GET /analytics/time-series`
+  - `GET /analytics/funnel`
+- **[NEW] `apps/api/src/analytics/analytics.service.ts`**: Core service containing the Prisma aggregation queries.
+
+### 2. Service Implementation Details
+The `AnalyticsService` will implement the following methods using Prisma's `groupBy` and aggregation features where possible, falling back to `$queryRaw` if advanced grouping is required:
+
+- **`getSummary(tenantId, startDate, endDate)`**: 
+  - `totalConversations`: Count of all conversations.
+  - `leadsGenerated`: Count of conversations with `status = 'CLOSED'` or `TRANSFERRED`.
+  - `conversionRate`: `(leadsGenerated / totalConversations) * 100`.
+  - `avgConversationLength`: Average number of `Message` rows per conversation.
+  - `leadsByTier`: Breakdown of HOT/WARM/COLD counts.
+
+- **`getConversationTimeSeries(tenantId, startDate, endDate)`**:
+  - Aggregates conversation counts by date (e.g., daily volume). 
+  - Will return an array of `{ date: string, count: number }` for frontend charting.
+
+- **`getLeadFunnelData(tenantId)`**:
+  - `totalStarted` (GREETING/QUALIFYING)
+  - `extracted` (EXTRACTING)
+  - `qualified` (SCORED/CLOSED/TRANSFERRED)
+  - `abandoned` (ABANDONED)
+
+### 3. Types Package Update
+- Modify `packages/types/src/analytics.ts` to ensure it matches the exact return types of the `AnalyticsService` endpoints so the Next.js dashboard can consume them with strong typing.
+
+## Verification Plan
+
+### Automated Tests
+- **[NEW] `apps/api/test/test-analytics.ts`**:
+  - We will create a test script that dynamically seeds 20+ dummy conversations and leads across various dates and statuses.
+  - We will query all three analytics endpoints and verify that the counts, averages, and time-series aggregations match the seeded data exactly.
+
+## Open Questions
+
+> [!NOTE]  
+> **Time-series Database Aggregation**  
+> We will likely use Prisma's `$queryRaw` to use PostgreSQL's `DATE_TRUNC('day', "startedAt")` for the time-series aggregation, as Prisma's native `groupBy` can be limited for date truncation. Let me know if you prefer native Prisma `findMany` followed by in-memory grouping for simplicity.
+
+
+
+# phase 18 Goal Description
+
+Phase 18 focuses on establishing the Design System & Shared UI Components for the Next.js frontend. We will construct a scalable, reusable, and token-driven component library strictly adhering to the premium design spec (Section 16).
+
+## User Review Required
+
+We will install `clsx`, `tailwind-merge`, and `lucide-react`. These are standard utilities for building tailwind UI components and integrating SVG icons without bloating the bundle. 
+Please let me know if you prefer to avoid adding these dependencies and instead write manual string concatenation for class names and raw SVG imports.
+
+## Proposed Changes
+
+### Dependencies
+- **Install `clsx`, `tailwind-merge`**: for resolving standard className conflicts in reusable UI components.
+- **Install `lucide-react`**: for high quality, unified icons (spinners, table sort carets, close buttons).
+
+### Core Utility
+#### [NEW] [utils.ts](file:///d:/logistics/apps/web/lib/utils.ts)
+A helper to neatly merge default design tokens with consumer-provided overrides (e.g., `cn(...)`).
+
+### Component Library (`apps/web/components/ui/`)
+#### [NEW] [Button.tsx](file:///d:/logistics/apps/web/components/ui/Button.tsx)
+Supports `primary`, `secondary`, `ghost`, and `destructive` variants, along with sizes.
+#### [NEW] [Input.tsx](file:///d:/logistics/apps/web/components/ui/Input.tsx)
+Standardized form input matching the Deep Navy / Slate color scale.
+#### [NEW] [Textarea.tsx](file:///d:/logistics/apps/web/components/ui/Textarea.tsx)
+Multi-line input.
+#### [NEW] [Select.tsx](file:///d:/logistics/apps/web/components/ui/Select.tsx)
+Standard native or custom select dropdown matching design.
+#### [NEW] [Badge.tsx](file:///d:/logistics/apps/web/components/ui/Badge.tsx)
+Specifically hardcoded to support the lead tiers: Hot (green/success), Warm (amber/warning), and Cold (slate/neutral).
+#### [NEW] [Card.tsx](file:///d:/logistics/apps/web/components/ui/Card.tsx)
+A standardized container with correct spacing and box-shadows.
+#### [NEW] [Modal.tsx](file:///d:/logistics/apps/web/components/ui/Modal.tsx)
+Dialog wrapper with a backdrop and centered container.
+#### [NEW] [Spinner.tsx](file:///d:/logistics/apps/web/components/ui/Spinner.tsx)
+An animated SVG loading ring.
+#### [NEW] [Skeleton.tsx](file:///d:/logistics/apps/web/components/ui/Skeleton.tsx)
+A subtle pulse animation component for loading states.
+#### [NEW] [Table.tsx](file:///d:/logistics/apps/web/components/ui/Table.tsx)
+Includes `Table`, `TableRow`, `TableCell`, and `TableHeader` with built-in optional sorting indicators.
+
+### Configuration Validations
+#### [MODIFY] [tailwind.config.ts](file:///d:/logistics/apps/web/tailwind.config.ts)
+Verify the already initialized setup ensures `Inter` is the default font, and the Deep Navy (`#1F4E79`) and Slate (`#64748B`) colors are globally locked in.
+#### [MODIFY] [globals.css](file:///d:/logistics/apps/web/app/globals.css)
+Confirm variables match the tokens, apply basic `transition-default` of `150ms ease`.
+
+## Verification Plan
+
+### Automated Tests
+- Run `npm run type-check` across the frontend to guarantee zero strict-mode TypeScript errors.
+
+### Manual Verification
+- We will temporarily mount these components onto the existing frontend landing page (`apps/web/app/page.tsx` or a temporary `/design` route) to verify they render cleanly, interact perfectly (hover states), and contain zero hardcoded colors outside of the token system.
+
+
+# Phase 19 Goal Description
+Phase 19 focuses on building the core customer-facing **Chat Widget Component**. This component will act as the primary interface for the AI, consuming our NestJS SSE streaming endpoint. It needs to be polished, responsive, and robust against streaming artifacts, while adhering to the minimal, avatar-free design specification.
+## User Review Required
+The SSE stream currently requires a `POST` request to send the user's message, but the browser's native `EventSource` API only supports `GET` requests.
+To solve this, there are two common approaches:
+1. **The Native Approach**: We send the message via a standard `fetch` POST request (`POST /conversations/message`). The backend immediately returns a `200 OK` and we open an `EventSource` listening to a `GET /conversations/:id/stream` endpoint. (This requires updating the backend to separate the POST and the Stream).
+2. **The Fetch API Approach (Recommended)**: We keep the backend exactly as it is (`POST /conversations/message` returns a stream) and consume it using the native `fetch` API and a `ReadableStream` decoder (`response.body.getReader()`) in the frontend, manually parsing the `data: ...` chunks.
+> [!IMPORTANT]
+> **Open Question:** I will proceed with **Option 2 (The Fetch API Approach)** as it requires zero backend modifications and handles POST streams perfectly without third-party dependencies. Does this align with your preference?
+## Proposed Changes
+### UI Components (`apps/web/components/chat/`)
+#### [NEW] [ChatWidget.tsx](file:///d:/logistics/apps/web/components/chat/ChatWidget.tsx)
+The primary stateful container. Manages the conversation array (`{ role: 'user' | 'ai', content: string }`), the input state, and the `fetch` stream parsing logic. Includes the input bar and send button.
+#### [NEW] [MessageBubble.tsx](file:///d:/logistics/apps/web/components/chat/MessageBubble.tsx)
+A purely presentational component. Right-aligned with a navy background (`bg-primary text-white`) for the user, and left-aligned with a light grey background (`bg-secondary-50 text-secondary-900`) for the AI. No avatars or emojis.
+#### [NEW] [TypingIndicator.tsx](file:///d:/logistics/apps/web/components/chat/TypingIndicator.tsx)
+A subtle animated ellipsis component rendered inside an AI `MessageBubble` while waiting for the first token to arrive from the server.
+### State & Streaming Logic
+- **Input Blocking:** The `Input` and Send `Button` will be strictly disabled while an AI request is in-flight to prevent double-submissions.
+- **Stream Parsing:** We will read chunks using `TextDecoder`, buffer incomplete lines, split by `\n\n`, and extract the `data:` payload.
+- **Event Handling:**
+  - `event: token` -> Append text to the active AI message bubble.
+  - `event: done` -> Finalize the message, re-enable the input, and log the latest conversation status.
+  - `event: error` -> Render a minimal inline error within the chat without losing history.
+### Responsiveness
+- Ensure `ChatWidget` fits seamlessly on a `375px` viewport (mobile-first).
+- Ensure the send button and input have a minimum touch target height of `44px`.
+## Verification Plan
+### Automated Tests
+- `npm run type-check` to ensure the widget components and streaming logic are type-safe.
+### Manual Verification
+- Render the `ChatWidget` dynamically in our `/design` gallery or the main `page.tsx` temporarily.
+- Point the widget to a mock or active local backend to test the word-by-word streaming animation, typing indicator delays, and mobile layout scaling down to 375px.
+
+
+# Phase 20 Goal Description
+
+Phase 20 integrates the `ChatWidget` we built in Phase 19 into a fully functional conversational flow. The goal is to create the Chat Route (`/chat/[configId]`) that automatically orchestrates the session lifecycle: starting a new conversation upon entry, securely maintaining the `sessionToken` in `sessionStorage` (so refreshing the tab restores the chat), and gracefully managing expiration errors. 
+
+## User Review Required
+
+The specification requires storing `sessionToken` in `sessionStorage` and resuming via `GET /conversations/:id/state`. However, `GET /conversations/state` is currently implemented in the backend as `GET /conversations/state` (fetching the active conversation from the bearer token context), not `/:id/state`. I will query `GET /conversations/state` securely using the stored `sessionToken` header to fetch the active conversation state.
+
+> [!IMPORTANT]
+> **Open Question:** Are you comfortable with putting the state management entirely in a dedicated `useConversationSession` custom hook within the `/chat/[configId]/page.tsx` file to cleanly separate the session logic from the presentation `ChatWidget`?
+
+## Proposed Changes
+
+### Routes (`apps/web/app/chat/[configId]/`)
+#### [NEW] [page.tsx](file:///d:/logistics/apps/web/app/chat/[configId]/page.tsx)
+The primary entry point for a conversation. 
+It extracts `configId` from the URL params.
+If no `sessionToken` exists in `sessionStorage` for this `configId`, it fires `POST /conversations/start`.
+If a token exists, it fires `GET /conversations/state` to resume.
+Passes the active `sessionToken` and `initialMessages` into the `<ChatWidget>`.
+
+### Logic & Session Management
+- **Token Storage**: `sessionStorage.setItem(\`ladeway_session_\${configId}\`, sessionToken)`. This ensures session isolation between tabs, but persists across tab refreshes.
+- **Resumption**: On mount, if a token is found, we query `GET /conversations/state`. We will map the backend `Message` entities into our `ChatWidget` `MessageProps` format.
+- **Expiration handling**: If `GET /conversations/state` returns `401 Unauthorized` (indicating token expiry), the page clears `sessionStorage` and immediately fires `POST /conversations/start` to begin a new session.
+- **Widget Integration**: We will update the `ChatWidget` or wrap it to handle the "Your session has expired. Start a new conversation?" UI if a 401 is triggered mid-conversation.
+
+## Verification Plan
+
+### Automated Tests
+- Run `npm run type-check` across the frontend repository.
+
+### Manual Verification
+1. Navigate to `/chat/<valid-config-id>`. Verify a new conversation is created in the DB and the greeting is immediately displayed.
+2. Hard-refresh the page (F5). Verify the conversation is fully restored and no duplicate conversation is created.
+3. Manually delete the conversation from the DB (simulating an expiry) or wait for expiry, then refresh. Verify the application gracefully resets and starts a fresh conversation seamlessly.
+
+
+
+# Phase 21 Goal Description
+
+Phase 21 focuses on building the primary **Multi-Industry Demo Landing Page** (`apps/web/app/page.tsx`). Since this is the very first thing Neal (or any evaluator) will see when testing the application, it needs to immediately demonstrate the premium design system we built in Phase 18 and cleanly offer the dual industry demonstrations. 
+
+## User Review Required
+
+The specification explicitly states we must showcase two industries side by side (e.g., Logistics and Real Estate) without hardcoding their configuration IDs. We previously built `GET /industry-configs/public` to fetch the available configs dynamically. 
+
+If there are more than two active configurations returned from the API, we can either display all of them as a grid of cards, or specifically slice/filter for just the first two.
+
+> [!IMPORTANT]
+> **Open Question:** Should the landing page dynamically render a card for *every* active config returned from the API (a grid layout), or do you want to hardcode the layout to strictly expect and display exactly two sections regardless of how many configs exist? (I recommend rendering a dynamic grid so it scales automatically if you add a third demo later).
+
+## Proposed Changes
+
+### UI Components (`apps/web/app/`)
+#### [NEW] [page.tsx](file:///d:/logistics/apps/web/app/page.tsx)
+- **Data Fetching:** Implemented as a **Server Component**. We will use `fetch(\`\${process.env.API_URL}/industry-configs/public\`, { cache: 'no-store' })` to securely fetch the active `configIds` before rendering. (Using `no-store` ensures the demo page always reflects the latest backend database state).
+- **Layout Structure:**
+  - **Hero Section:** A visually polished header with a strong headline and subheadline matching the Deep Navy (`#1F4E79`) and Slate (`#64748B`) typography.
+  - **Grid / Demo Sections:** We will iterate over the fetched configs and use the `Card` component to display each industry's use case.
+  - **Card Content:** Each card will display the `industryName` (e.g., "Logistics Services"), the `personaName` & `greeting` context, and a clear `Button` linking to `/chat/[configId]`.
+- **Loading / Error States:** If the fetch fails or no configs exist, we'll display a clean fallback UI instructing the evaluator to run the database seed script.
+
+## Verification Plan
+
+### Automated Tests
+- Run `npm run type-check` across the frontend repository to ensure strict typing.
+
+### Manual Verification
+1. Navigate to the root URL `/`.
+2. Confirm the page loads instantly (Server Component) and correctly displays cards for the seeded configs.
+3. Verify the "Start Conversation" button correctly links to `/chat/<actual-config-id>`.
+4. Run the E2E script `test-config-crud.ts` to add a new config, refresh the landing page, and verify the new card automatically appears in the UI.
+
+
+# Phase 22: Conversation Completion UI
+
+You are absolutely right—my apologies for hallucinating Phase 22 from the incorrect prior context! We are building the **Conversation Completion UI**, ensuring the customer gets a professional, personalized confirmation instead of a dead end.
+
+## Goal
+When qualification is complete, the customer sees a personalized confirmation (generated from their Lead summary). The input bar is disabled, replaced with a clear completion indicator, and the UI visually distinguishes the completed state.
+
+## Open Questions
+
+> [!NOTE]
+> Currently, the backend creates the `Lead` (and its LLM-generated summary) **asynchronously** after the conversation closes. To send a confirmation message based on that summary, we must either:
+> 1. Make Lead creation **synchronous** at the end of the conversation (which adds 2-3 seconds to the final response time as it generates the summary and the confirmation).
+> 2. Expose a new endpoint to poll for the confirmation message once the chat is closed.
+> **I recommend Option 1** for simplicity, as the user has already finished typing and waiting 2 seconds for a final summary is a natural UX pattern. Do you agree?
+
+## Proposed Changes
+
+### 1. Backend (`apps/api`)
+
+#### [MODIFY] `apps/api/src/conversation/conversation.service.ts`
+- When `nextAction === CLOSE_CONVERSATION`, change the new status to `SCORED`.
+- `await` the `LeadService` to generate the Lead and its summary synchronously instead of `.catch()` asynchronously.
+- Generate a customer-facing confirmation message using the new summary.
+- Yield the confirmation message in the `event: done` JSON payload: `{"_done": true, "status": "SCORED", "confirmationMessage": "..."}`.
+
+#### [MODIFY] `apps/api/src/ai/prompt.service.ts`
+- Add a new prompt method: `assembleCustomerConfirmationPrompt(summary: string)`.
+- The prompt will instruct the LLM to rewrite the 3rd-person sales summary into a professional 1st-person confirmation (e.g., "Thanks — we've noted your move from New York to London...").
+
+### 2. Frontend (`apps/web`)
+
+#### [MODIFY] `apps/web/components/chat/ChatWidget.tsx`
+- **Parse the confirmation**: Update the SSE parser to extract `data.confirmationMessage` when `event === 'done'`.
+- **Completion Indicator**: When `isComplete` becomes true, replace the `<form>` input area with a clean, branded completion indicator (e.g., "✅ Qualification Complete. A team member will be in touch.").
+- **Confirmation Bubble**: Inject the `confirmationMessage` into the `messages` array as a special `system` or `completed` message type, styled distinctly from standard AI messages (perhaps with a subtle green tint or a border) to fulfill the "visual distinction" requirement.
+
+## Verification Plan
+1. Start a new conversation for Logistics/Moving.
+2. Provide all required details (origin, destination, size, timeline) to trigger the `CLOSE_CONVERSATION` state.
+3. Verify the final SSE event contains `status: SCORED`.
+4. Verify the frontend cleanly hides the input bar and renders the personalized, LLM-generated confirmation summary in a visually distinct bubble.
+
+
+# Phase 23: Sales Rep Dashboard
+
+The goal of this phase is to build the core CRM interface for Sales Reps to view, prioritize, and manage qualified leads.
+
+## User Review Required
+
+> [!IMPORTANT]
+> The backend currently lacks a dedicated `/leads` controller to list and update leads. We will need to create this controller before building the frontend dashboard. I've designed a polling mechanism (every 30 seconds) for the dashboard as specified, to ensure reps see new leads instantly without manual refreshes.
+
+## Open Questions
+
+> [!NOTE]
+> 1. Should Sales Reps only be able to view leads that belong to their specific `tenantId`, or is there a need for a global admin view? (I will implement strict tenant isolation by default).
+> 2. What are the allowed Lead statuses for the `PATCH /leads/:id` endpoint? I will default to `['NEW', 'CONTACTED', 'QUALIFIED', 'LOST']` unless you specify otherwise.
+
+## Proposed Changes
+
+### 1. Backend API (`apps/api/src/lead`)
+
+#### [NEW] `apps/api/src/lead/lead.controller.ts`
+- Create a new NestJS controller with standard JWT authentication and `REP` or `ADMIN` role guarding.
+- **`GET /leads`**: Returns a list of leads for the authenticated tenant. Supports query parameters for filtering (`tier`, `status`) and sorting (`sortBy=date|score`, `order=asc|desc`). Includes related `conversation.config` to display the Industry name.
+- **`PATCH /leads/:id`**: Allows updating the `status` of a lead directly from the table inline.
+
+#### [MODIFY] `apps/api/src/lead/lead.module.ts`
+- Register the new `LeadController`.
+
+### 2. Frontend Dashboard (`apps/web`)
+
+#### [NEW] `apps/web/app/dashboard/layout.tsx` & `Sidebar.tsx`
+- We need to establish the persistent layout for the dashboard with navigation links (Dashboard/Leads vs Analytics). *Note: We planned this in my previous misinterpretation, but we still need to build it now so the table has a home.*
+
+#### [MODIFY] `apps/web/app/dashboard/page.tsx`
+- Build the Lead Pipeline Table component.
+- **Columns**: Contact Name, Industry, Summary (truncated), Tier Badge, Status (editable dropdown), Date, Actions.
+- **Filtering & Sorting**: Add UI controls to filter by Tier/Status and sort columns.
+- **Polling**: Implement a React `useEffect` interval to fetch `GET /leads` every 30 seconds, automatically appending new leads to the UI.
+
+#### [NEW] `apps/web/components/ui/Table.tsx`
+- Create a polished, premium Next.js table component matching the Ladeway design system.
+
+## Verification Plan
+1. Create a dummy lead via the chat widget.
+2. Log into the Dashboard as a `REP`.
+3. Verify the new lead automatically appears in the pipeline table within 30 seconds.
+4. Test filtering by `HOT` tier to ensure the table correctly isolates high-value leads.
+5. Change the lead's status to `CONTACTED` inline and verify the backend correctly persists the patch.
+
+
+
+# Phase 24: Lead Detail View
+
+The goal of this phase is to provide Sales Reps with a comprehensive, single-screen view of a lead, exposing all the context they need to successfully close the deal (including the full AI conversation transcript and extracted structured data).
+
+## User Review Required
+
+> [!NOTE]
+> 1. **Routing Strategy**: The Phase plan mentions `apps/web/app/dashboard/leads/[id]/page.tsx`, but your previous message mentioned a **"slide-over panel"** for the detail view. A slide-over panel (like a Shadcn UI Sheet or a fixed right-side panel) is usually better for CRM workflows than navigating away to a new page. Should I implement this as a Next.js parallel route/intercepted route modal, a standard separate page, or a client-side side-panel in the existing pipeline view?
+> 2. **Score Rationale**: The prompt mentions "brief rationale" for the score, but we currently only store the final numerical `score` and categorical `tier` on the `Lead` model, without the specific textual rationale string. I will add a simple badge for the tier and display the score number for now, but let me know if we need to modify the backend to save textual rule explanations.
+
+## Proposed Changes
+
+### 1. Frontend Detail View Component
+
+#### [NEW] `apps/web/components/admin/LeadDetailPanel.tsx`
+- Build a polished detail view component that accepts a `leadId` and fetches the full lead object via our recently created `GET /leads/:id` endpoint.
+- **Header Section**: Contact Name, Email, Phone, and the inline Status Update dropdown.
+- **Metrics Card**: High-visibility display of the `Tier` (Hot/Warm/Cold badge) and numerical `Score`.
+- **Extracted Data Grid**: A clean 2-column grid displaying all `fieldKey` and `fieldValue` pairs from the `ExtractedData` relation.
+- **Conversation Transcript**: A scrollable chat history mirroring the UI of the public ChatWidget. User messages right-aligned (blue), AI messages left-aligned (gray).
+
+### 2. Frontend Routing / Integration
+
+#### [MODIFY] `apps/web/app/dashboard/leads/[id]/page.tsx` OR `LeadPipeline.tsx`
+- Depending on the answer to Open Question #1, I will either build this as a dedicated full page at `/dashboard/leads/[id]` OR integrate it as a slide-over panel directly within the `LeadPipeline` component that opens when clicking a table row.
+
+## Verification Plan
+1. Start the dev server and- Validate that the dashboard fully respects Dark Mode color semantics.
+
+---
+
+# Phase 27: Tenant Onboarding & Auth Flow
+
+The goal of this phase is to provide a complete, self-serve registration flow where a new customer can sign up, automatically receive a default AI agent, and be guided through an onboarding wizard to deploy their agent immediately.
+
+## User Review Required
+> [!NOTE]
+> Please review the signup fields and the onboarding flow. 
+> 1. **Signup Fields**: The plan collects Company Name, Subdomain, Admin Email, and Password. Is this sufficient?
+> 2. **Login Redirect**: Should the signup form immediately log the user in and redirect them to `/dashboard/onboarding`? (I propose yes, for the smoothest UX).
+> 3. **Default Template**: The backend will automatically create a "Logistics/Moving" template for every new tenant as a starting point.
+
+## Proposed Changes
+
+### 1. Backend APIs
+#### [NEW] `apps/api/src/tenant/tenant.controller.ts` & `tenant.service.ts`
+- Create `POST /tenants/register` endpoint.
+- Validates the uniqueness of the `subdomain` and `email`.
+- Wraps the following in a Prisma transaction (using `$system` client):
+  - Creates the new `Tenant`.
+  - Hashes the password with `bcrypt` and creates the `User` (Role: `ADMIN`).
+  - Creates a default `IndustryConfig` (seeded with the Logistics/Moving template).
+- Returns the JWT Auth Token (using existing `AuthService.login` logic) so the frontend can immediately authenticate the user.
+
+### 2. Frontend Registration
+#### [NEW] `apps/web/app/signup/page.tsx` & `actions.ts`
+- A sleek, centered registration form matching the `login` page aesthetics.
+- Captures Company Name, Subdomain, Email, and Password.
+- Submits via a Next.js Server Action to the new `/tenants/register` API.
+- Upon success, sets the `access_token` cookie and redirects to `/dashboard/onboarding`.
+
+### 3. Onboarding Wizard
+#### [NEW] `apps/web/app/dashboard/onboarding/page.tsx`
+- A specialized dashboard view restricted to new users.
+- **Step 1: Review AI Persona**: Displays the newly generated default configuration and allows the admin to edit the `personaName`, `personaRole`, and `greeting`.
+- **Step 2: Review Qualification Fields**: Displays the pre-seeded qualification fields (Move Type, Origin, Destination) and allows minor edits.
+- **Step 3: Embed Code**: Provides the `<script>` tag snippet with the tenant's API key/subdomain for them to copy and paste into their website.
+- **Finish**: A button that completes onboarding and redirects to `/dashboard/overview`.
+
+## Verification Plan
+1. Navigate to `http://localhost:3000/signup`.
+2. Fill out the form with a new company and submit.
+3. Verify successful redirection to the onboarding wizard.
+4. Complete the 3 onboarding steps.
+5. Verify the backend successfully created the Tenant, User, and default IndustryConfig.
+
+---
+
+# Phase 28: Security Hardening
+
+The goal of this phase is to secure the platform against common attacks, enforce rate limits, strict CORS policies, and add HTTP security headers before production deployment.
+
+## User Review Required
+> [!NOTE]
+> Please review the security measures below:
+> 1. **CORS Origins**: The plan allows `localhost:3000` and `https://ladeway.vercel.app`. Are there any other origins needed for the embed script (e.g., wildcard for customer domains, or do we use a specific public endpoint for the chat)?
+> 2. **Helmet Setup**: Adding standard security headers (HSTS, NoSniff, FrameGuard).
+> 3. **Body Size Limits**: Setting global JSON body limit to `1mb` to prevent payload injection attacks.
+
+## Proposed Changes
+
+### 1. Security Packages
+- Install `helmet` for NestJS: `npm install helmet`.
+
+### 2. Main NestJS Configuration (`apps/api/src/main.ts`)
+- Enable CORS explicitly for `localhost:3000` and `https://ladeway.vercel.app`.
+- Inject `helmet()` middleware for default security headers.
+- Configure `express.json({ limit: '1mb' })` to restrict massive request bodies.
+
+### 3. Controller Audits
+- Run a quick codebase sweep to ensure `GET /analytics`, `POST /industry-configs`, and `PATCH /leads` are all strictly decorated with `@UseGuards(JwtAuthGuard, RolesGuard)` and `@Roles('ADMIN', 'REP')` as needed.
+- Open up `POST /conversations/message` to allow requests from any origin (since the chat widget lives on external customer websites). We will implement a specific CORS exception or wildcard for the public Chat API routes.
+
+## Verification Plan
+1. Check headers using curl (`curl -I http://localhost:3001`) to verify `x-frame-options` and `strict-transport-security` are present.
+2. Verify cross-origin requests from an unauthorized domain fail with CORS errors.
+3. Verify public chat endpoints remain accessible from external websites.
+
+---
+
+# Phase: Public Storefront & Dashboard Navigation Fixes
+
+The goal of this phase is to revamp the public landing page to act as a multi-tenant storefront, fix broken 404 links in the admin dashboard, and connect the authentication flow.
+
+## User Review Required
+> [!NOTE]
+> Please review the plan for the storefront and the dashboard fixes:
+> 1. **Dashboard Overview**: The `/dashboard/overview` link currently 404s. Should I build a simple welcome page with high-level stats (similar to Analytics), or should we just redirect `/dashboard/overview` to the `Leads` pipeline? 
+> 2. **Dashboard Settings**: I will build a `/dashboard/settings` page displaying the tenant's Company Name and Subdomain (read-only for now) to fix the 404 and maintain the theme. Is this acceptable?
+> 3. **Public Storefront**: The landing page will list all tenants. Clicking one goes to `/company/[id]`, which lists their specific AI Agents. Is this the exact flow you envision?
+
+## Proposed Changes
+
+### 1. Backend APIs
+#### [MODIFY] `apps/api/src/tenant/tenant.controller.ts` & `tenant.service.ts`
+- Add `GET /tenants/public` to return a list of tenants (id, name, subdomain) without requiring authentication.
+#### [MODIFY] `apps/api/src/industry-config/industry-config.controller.ts`
+- Ensure `GET /industry-configs/public` accepts an optional `tenantId` query parameter to filter configs by company.
+
+### 2. Frontend: Public Storefront
+#### [MODIFY] `apps/web/app/page.tsx`
+- Build a professional landing page header with **Login** and **Sign up** navigation links.
+- Fetch `GET /tenants/public` and display the companies in a beautiful grid of cards.
+#### [NEW] `apps/web/app/company/[id]/page.tsx`
+- A dedicated public page for a specific company.
+- Fetches `GET /industry-configs/public?tenantId=[id]`.
+- Displays their configured AI Agents with a "Start Conversation" button that links to the existing `/chat/[configId]` route.
+
+### 3. Frontend: Auth Navigation
+#### [MODIFY] `apps/web/app/login/page.tsx`
+- Add a "Don't have an account? Sign up" link at the bottom of the form, pointing to `/signup`.
+
+### 4. Frontend: Admin Dashboard Fixes
+#### [NEW] `apps/web/app/dashboard/overview/page.tsx`
+- Create the Overview page with a consistent admin theme (either simple stats or redirect based on your feedback).
+#### [NEW] `apps/web/app/dashboard/settings/page.tsx`
+- Create the Settings page rendering a unified UI card displaying the workspace details.
+
+## Verification Plan
+1. Visit `http://localhost:3000/`. Verify the new header links (Login/Signup) and the list of tenant companies.
+2. Click on a company and verify it navigates to `/company/[id]` and displays their AI agents.
+3. Click an AI agent and verify it opens the chat widget.
+4. Log into the admin portal and click "Overview" and "Settings" in the sidebar to verify the 404s are resolved and the theme matches.
+
+# Phase 25: Admin Configuration Console
+
+The goal of this phase is to provide a non-technical admin interface to create, edit, and preview AI Agents (Industry Configurations) dynamically.
+
+## User Review Required
+
+> [!NOTE]
+> 1. **Routing**: The project document mentions `apps/web/app/admin/configs/page.tsx`, but we established our persistent admin layout in `/dashboard`. I propose we build this inside the dashboard layout at `apps/web/app/dashboard/configs/page.tsx` and `apps/web/app/dashboard/configs/[id]/page.tsx` to keep the layout unified. Do you approve?
+> 2. **Preview Endpoint**: The plan mentions a `GET /configs/:id/preview` endpoint. However, a "live preview" of an *unsaved* configuration requires sending the modified config JSON in the request body. Should we implement this as a `POST /industry-configs/preview` endpoint instead, so the frontend can send the draft configuration state?
+
+## Proposed Changes
+
+### 1. Backend Modifications (`apps/api/src/industry-config`)
+
+#### [NEW] `POST /industry-configs/preview`
+- Add an endpoint that accepts a draft configuration payload.
+- Returns the generated `qualificationPrompt` and a sample greeting so the frontend can display it in the Mini Chat Widget.
+
+### 2. Frontend Configuration List
+
+#### [NEW] `apps/web/app/dashboard/configs/page.tsx`
+- A table listing all configurations for the tenant.
+- Shows Config Name, Industry, Active status toggle, and an "Edit" button.
+
+### 3. Frontend Configuration Editor
+
+#### [NEW] `apps/web/app/dashboard/configs/[id]/page.tsx`
+- A complex, multi-section form validated with Zod.
+- **Section 1 (Basic Details)**: Persona Name, Role, Greeting, and Tone Selector.
+- **Section 2 (Qualification Fields)**: A dynamic list where admins can Add/Remove fields, set `fieldKey`, `type`, `required`, and `extractionHint`.
+- **Section 3 (Scoring Rules)**: A dynamic list for scoring criteria.
+- **Section 4 (Live Preview)**: A "Preview AI" button that hits the preview endpoint and renders a mini `ChatWidget` (or a static mock of the AI's first response) using the unsaved settings.
+
+#### [NEW] `apps/web/components/admin/ConfigEditor.tsx`
+- A dedicated Client Component to handle the complex local form state (arrays of fields and rules) and Zod validation before submitting the `PUT /industry-configs/:id` request.
+
+## Verification Plan
+1. Navigate to `/dashboard/configs` and verify the list of configs loads.
+2. Click into the Logistics config and add a new Qualification Field ("Preferred Contact Time").
+3. Click "Live Preview" to verify the backend successfully generates a prompt incorporating the new field.
+4. Save the configuration and verify the backend persists it accurately without errors.
+
+
+
+# Phase 26: Analytics Dashboard
+
+The goal of this phase is to provide the Tenant Admin with a high-level overview of their AI agent's performance, lead qualification rates, and conversation volumes over the last 30 days.
+
+## User Review Required
+
+> [!NOTE]
+> The plan has been approved with the following modifications:
+> 1. **Time Range**: Hardcoded 30-day default. No date picker needed.
+> 2. **Charts**: Do NOT use recharts or any chart library. All visualisations must use pure Tailwind CSS `div` elements to reduce bundle size and dependencies.
+
+## Proposed Changes
+
+### 1. Frontend Analytics Dashboard
+
+#### [NEW] `apps/web/app/dashboard/analytics/page.tsx`
+- A Server Component that securely fetches data from `GET /analytics/summary` and `GET /analytics/conversations`.
+- Automatically calculates the last 30 days date range to pass to the API queries.
+- Renders the 4 core Summary Cards:
+  - **Total Conversations**: `totalConversations`
+  - **Qualified Leads**: `totalLeads`
+  - **Hot Lead Rate**: `(hotLeads / totalLeads) * 100`%
+  - **Avg. Conversation Length**: `averageTurnCount` messages/conv
+
+### 2. Chart Visualizations
+
+#### [NEW] `apps/web/components/admin/AnalyticsCharts.tsx`
+- Pure Tailwind CSS components (no chart libraries).
+- **Lead Tier Distribution (Stacked Bar)**: A horizontal stacked bar using `div` elements with flexbox and percentages.
+- **Conversation Volume (Vertical Bar Chart)**: A time-series bar chart using vertical `div` elements with height percentages.
+- **Industry Breakdown**: Uses the existing `Table` component from Phase 18.
+- **Lead Funnel**: A simple horizontal stacked bar, similar to the tier distribution.
+
+## Verification Plan
+1. Navigate to `/dashboard/analytics`.
+2. Verify the 4 summary cards correctly display aggregated data based on the seeded conversations.
+3. Verify the Lead Tier Distribution chart renders without errors and strictly uses the Navy/Slate color palette.
+4. Verify the Time-Series chart successfully graphs the historical conversation volume trend.

@@ -1,4 +1,4 @@
-import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { ScoringService } from '../qualification/scoring.service';
 import { LLMRouterService } from '../ai/llm-router.service';
@@ -64,8 +64,9 @@ export class LeadService {
 
     // 4. Create Lead
     // Using $system to bypass RLS in case this is running from public endpoint or cron
-    const lead = await this.prisma.$system.lead.create({
-      data: {
+    const lead = await this.prisma.$system.lead.upsert({
+      where: { conversationId: conversation.id },
+      create: {
         conversationId: conversation.id,
         tenantId: conversation.tenantId,
         contactName: contactInfo.contactName,
@@ -76,6 +77,15 @@ export class LeadService {
         summary,
         status: leadStatus,
       },
+      update: {
+        contactName: contactInfo.contactName,
+        contactEmail: contactInfo.contactEmail,
+        contactPhone: contactInfo.contactPhone,
+        score,
+        tier,
+        summary,
+        status: leadStatus,
+      }
     });
 
     this.logger.log(`Created lead ${lead.id} for conversation ${conversation.id}`);
@@ -87,13 +97,94 @@ export class LeadService {
     contactEmail: string | null;
     contactPhone: string | null;
   } {
-    const find = (...keys: string[]) =>
-      data.find(d => keys.includes(d.fieldKey) && d.fieldValue)?.fieldValue ?? null;
+    const find = (...keys: string[]) => {
+      const found = [...data].reverse().find(d => {
+        if (!keys.includes(d.fieldKey) || !d.fieldValue) return false;
+        const val = d.fieldValue.toLowerCase();
+        return val !== 'null' && val !== 'none' && val !== 'not explicitly stated' && val !== 'not specified';
+      });
+      return found?.fieldValue ?? null;
+    };
 
     return {
       contactName: find('name', 'contact_name', 'full_name', 'customer_name'),
       contactEmail: find('email', 'contact_email', 'email_address'),
       contactPhone: find('phone', 'contact_phone', 'phone_number', 'mobile'),
     };
+  }
+
+  async findAll(tenantId: string, options: {
+    page: number;
+    limit: number;
+    tier?: string;
+    status?: string;
+    sortBy: string;
+    order: string;
+  }) {
+    const where: any = { tenantId };
+    if (options.tier) where.tier = options.tier;
+    if (options.status) where.status = options.status;
+
+    let orderBy: any = { createdAt: 'desc' };
+    if (options.sortBy === 'score') orderBy = { score: options.order };
+    if (options.sortBy === 'date') orderBy = { createdAt: options.order };
+
+    const leads = await this.prisma.lead.findMany({
+      where,
+      include: {
+        conversation: {
+          include: {
+            config: {
+              select: { industryName: true, personaName: true }
+            }
+          }
+        }
+      },
+      orderBy,
+      skip: (options.page - 1) * options.limit,
+      take: options.limit,
+    });
+
+    const total = await this.prisma.lead.count({ where });
+
+    return {
+      data: leads,
+      meta: {
+        total,
+        page: options.page,
+        limit: options.limit,
+        totalPages: Math.ceil(total / options.limit),
+      }
+    };
+  }
+
+  async findOne(id: string, tenantId: string) {
+    const lead = await this.prisma.lead.findFirst({
+      where: { id, tenantId },
+      include: {
+        conversation: {
+          include: {
+            messages: { orderBy: { timestamp: 'asc' } },
+            extractedData: true,
+            config: {
+              select: { industryName: true, personaName: true }
+            }
+          }
+        }
+      }
+    });
+
+    if (!lead) throw new NotFoundException('Lead not found');
+    return lead;
+  }
+
+  async updateStatus(id: string, status: string, tenantId: string) {
+    const lead = await this.prisma.lead.findFirst({ where: { id, tenantId } });
+    if (!lead) throw new NotFoundException('Lead not found');
+
+    return this.prisma.lead.update({
+      where: { id },
+      data: { status }
+    });
   }
 }

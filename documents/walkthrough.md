@@ -531,3 +531,194 @@ Phase 15 introduces the ability for users to gracefully escalate the conversatio
 - **Implementation:** Upon intercepting a transfer request, the conversation transitions immediately to `TRANSFERRED`. The `ExtractorService` then runs in the background to glean any data provided prior to escalation.
 - **Lead Hand-off:** A Lead record is created asynchronously with a dedicated `status` of `TRANSFERRED`, allowing sales representatives to easily identify and prioritize escalated users in the dashboard.
 - **Verification:** `test-escalation.ts` successfully ran an end-to-end flow demonstrating immediate transfer and lead creation from a frustrated user.
+
+# Phase 16: Config CRUD Hardening
+
+Phase 16 hardened the IndustryConfig APIs to ensure they are production-ready for the admin dashboard. We introduced versioning and snapshotting to ensure complete historical integrity of past conversations.
+
+### 1. Config Versioning & Updates (Immutability)
+- **Implementation:** Refactored `PUT /configs/:id` so that updating structural elements (`fieldsJson` or `scoringRulesJson`) no longer mutates the existing row. Instead, the current config is deactivated (`isActive: false`) and a new config row is created, effectively acting as a version bump.
+- **In-place Updates:** Superficial changes (like `personaName` or `greeting`) still update in place to prevent unnecessary database bloat.
+- **Return Value:** The API now returns `{ id, versioned: boolean }` so clients know if the ID changed.
+
+### 2. Session Config Snapshotting
+- **Implementation:** `ConversationService.startConversation` now takes a snapshot of the active `fieldsJson` and `scoringRulesJson` and stores it directly inside the Redis `ConversationSession`.
+- **Result:** If an administrator bumps the version of a config while a user is mid-conversation, the user's active session is completely immunized. The extraction engine and LLM prompts read strictly from the frozen session snapshot, guaranteeing consistency.
+
+### 3. Deletion Guards & Deactivation
+- **Implementation:** Added a rigid guard to `DELETE /configs/:id` that checks for any linked conversations. If found, it returns a `409 Conflict`, enforcing the rule that used configs can only be deactivated, never deleted.
+- **Status Toggle:** Added `PATCH /configs/:id/status` to easily deactivate a config without a full update payload. `POST /conversations/start` correctly rejects deactivated configs with a `404`.
+
+### 4. Zero-Record Preview Endpoint
+- **Implementation:** Added `GET /configs/:id/preview?message=...` to allow administrators to simulate a one-turn conversation with the configured persona.
+- **Verification:** It successfully returns the generated LLM response dynamically based on the requested tone/persona without creating *any* junk records in the PostgreSQL database. Verified via `test-config-crud.ts`.
+
+
+# Phase 17: Analytics Data Layer
+
+**Goal**: Provide the core data APIs for the frontend analytics dashboards, aggregating conversation and lead data efficiently.
+
+**Implementation Highlights**:
+1. **Raw SQL Optimization**: We opted to bypass Prisma's middleware transaction overhead using `Prisma.sql` and `$queryRaw` to concurrently calculate aggregated summary data (Conversations by status, Average turn count, Leads by tier, Industry funnel metrics).
+2. **Time-series endpoints**: Added time-series grouping endpoints (`/analytics/conversations`, `/analytics/leads`) utilizing PostgreSQL's `DATE_TRUNC` function for charting.
+3. **RBAC Guarding**: Strictly secured all three new endpoints (`/analytics/summary`, `/analytics/conversations`, `/analytics/leads`) with `@Roles('ADMIN')`. The REP role correctly receives a `403 Forbidden`.
+4. **Performance Indexes**: Added targeted composite indexes (`tenantId, status`, `tenantId, startedAt`, `tenantId, tier`, `tenantId, createdAt`) directly into the `schema.prisma` to keep aggregation fast at scale.
+
+**Verification**: E2E test scripts created 20 dummy conversations, 100 messages, and 15 leads, executing raw queries correctly via `Promise.all` and parsing counts, successfully matching funnel logic securely. This wraps up all 17 backend phases.
+
+---
+
+# Phase 18: Design System & Shared UI Components
+
+**Goal**: Establish the foundational design tokens, typography, and base component library for the Next.js frontend to ensure every screen matches the premium design specification exactly.
+
+**Implementation Highlights**:
+1. **Utility & Dependencies**: Configured `clsx` and `tailwind-merge` within a central `cn()` utility (`lib/utils.ts`). Installed `lucide-react` for premium, consistent scalable vector icons (resolved React 18 type mismatches by updating `@types/react`).
+2. **Component Library Built**: Developed all 13 core components (`Button`, `Input`, `Textarea`, `Select`, `Badge`, `Card`, `Modal`, `Spinner`, `Skeleton`, `Table`) in `components/ui/`.
+3. **Exact Token Mapping**: 
+   - Overhauled `Badge.tsx` to explicitly handle all 6 possible backend states with their designated styles (`HOT`, `WARM`, `COLD`, `TRANSFERRED`, `ABANDONED`, `DEFAULT`).
+   - Extended `tailwind.config.ts` to include `primary-light` and `surface` tokens.
+4. **Developer Reference Gallery**: Created `apps/web/app/design/page.tsx` as a permanent design system component gallery. It displays side-by-side variants of all components, demonstrating focus, hover, disabled states, and the `150ms ease` animation spec.
+
+**Verification**: Ran `npm run type-check` strictly verifying the entire React TS codebase cleanly compiles.
+
+Moving directly to **Phase 19 (Chat Widget Component)** as requested next.
+
+---
+
+# Phase 19: Chat Widget Component
+
+**Goal**: Build a production-quality, professionally designed customer-facing chat interface that consumes the NestJS SSE streaming endpoint reliably.
+
+**Implementation Highlights**:
+1. **Public Endpoint for Configs**: Added `GET /industry-configs/public` in the NestJS backend to allow the frontend to fetch available config records seamlessly without needing an admin JWT.
+2. **Widget Layout & Components**: Developed `ChatWidget.tsx`, `MessageBubble.tsx`, and `TypingIndicator.tsx`. Clean, minimal layout respecting the specification (no avatars/emojis, strictly utilizing `primary` navy for users and `secondary-50` for AI). Mobile responsiveness guaranteed with a 375px min-width wrapper and 44px minimum touch targets on the inputs/buttons.
+3. **SSE Streaming (Fetch API)**: Implemented robust stream consumption via `response.body.getReader()`. Built a line buffer paired with `TextDecoder({ stream: true })` to prevent JSON parsing crashes on chunk boundaries.
+4. **Seamless Typing Indicator**: A subtle, bouncing 3-dot animation is displayed inside a placeholder `MessageBubble` immediately when an AI response starts in-flight, which gracefully is swapped with actual markdown tokens as soon as `event: token` pushes chunks, removing any visual flash.
+5. **Auto-Scroll & Session State**: Handled scrolling seamlessly using a `useRef` sentinel div pointing to the bottom of the message array. Handled component locks around streaming events (`done` to re-enable, `error` for inline alerts).
+
+**Verification**: `npm run type-check` compiles perfectly. The SSE parser cleanly matches all requirements.
+
+---
+
+# Phase 20: Conversation Start Flow & Session Management
+
+**Goal**: Orchestrate the conversational session lifecycle logic, allowing conversations to be initiated cleanly, persisted across tabs using `sessionStorage`, and seamlessly restarted if expired.
+
+**Implementation Highlights**:
+1. **Public State Endpoint**: Expanded the backend `ConversationController` with a public `GET /state?sessionToken=xxx` endpoint that uses `$system.message.findMany` to bypass JWT constraints and securely retrieve the message history via an active `sessionToken`.
+2. **Session Hook (`useConversationSession`)**: Extracted all data lifecycle logic into a cleanly separated custom hook. Handled React strict mode race conditions via a `useRef` guard to prevent double `POST /start` requests, and accurately mapped backend `Message` entities into `MessageProps` format for the UI.
+3. **Storage Strategy**: Cached the `sessionToken` inside `sessionStorage` utilizing a `ladeway_session_${configId}` key format. This prevents collisions across different industry demos while keeping the session persistent across hard refreshes.
+4. **Expiration Handlers (401/410)**: Upgraded `ChatWidget` to invoke `onSessionExpired` if the active fetch streaming API replies with `410 Gone` or `401 Unauthorized`. The top level `ChatPage` correctly injects the `reset()` function to wipe `sessionStorage` and launch a clean conversation if this occurs mid-stream.
+5. **Chat Route**: Completed `apps/web/app/chat/[configId]/page.tsx` providing a robust mobile-first layout containing the virtual assistant header wrapper over the functional `ChatWidget`.
+
+**Verification**: `npm run type-check` runs with 0 errors across the frontend repo. Component logic handles both empty start and active resume scenarios successfully.
+
+---
+
+# Phase 21: Multi-Industry Demo Landing Page
+
+**Goal**: Construct a polished, high-converting root landing page that dynamically showcases all available industry demonstrations using a robust server-side architecture.
+
+**Implementation Highlights**:
+1. **Server Component Architecture**: Rebuilt `apps/web/app/page.tsx` as an asynchronous Server Component. We securely query `process.env.API_URL` without exposing it to the client bundle, enforcing `{ cache: 'no-store' }` so new industry configs appear instantly upon creation.
+2. **Dynamic Grid Scaling**: Migrated from a strict two-column layout to a fully dynamic responsive grid (`grid-cols-1 md:grid-cols-2 lg:grid-cols-3`). This scales automatically for Logistics, Real Estate, Legal Services, and any future configs, visually reinforcing the data-driven engine.
+3. **Design System Integration**: Leveraged the `Card`, `CardHeader`, `CardTitle`, and `Button` components from Phase 18. Each card clearly routes the evaluator directly into the associated `/chat/[configId]` experience.
+4. **Resilient Fallback UX**: Implemented a graceful error boundary specifically for demo environments (like cold starts on Railway). If the backend is unreachable, it displays a non-blocking `AlertCircle` warning and populates the grid with mock `fallbackConfigs` to preserve the visual impact rather than crashing to a white screen.
+5. **Core Value Proposition**: Injected the requested messaging immediately below the grid: *"Same AI engine. Different industries. Configured entirely through data — no code changes."*
+
+**Verification**: Ran `npm run type-check` cleanly. The page securely consumes environment variables and constructs proper Next.js routing patterns.
+
+# Phase 22: Conversation Completion UI
+
+**Goal**: When qualification is complete, the customer sees a professional, personalised confirmation.
+
+**What was completed**:
+1. **Synchronous Lead Creation**: Modified `conversation.service.ts` to `await` the Lead Creation synchronously when `nextAction === CLOSE_CONVERSATION`.
+2. **String Transformation**: Parsed the LLM-generated Lead Summary (written in the third person) into a professional, first-person confirmation message (e.g. "We've noted that you... A member of our team will be in touch with you shortly.") using regex, completely avoiding an additional LLM token cost.
+3. **SSE Payload Injection**: The backend now pushes the completed `Lead`'s `tier`, `confirmationMessage`, and `status: SCORED` within the final `event: done` stream payload.
+4. **ChatWidget Replacement**: The frontend captures the confirmation payload and replaces the `<form>` textarea with a premium, dynamic Completion Panel, styled correctly according to the user's `tier` (`HOT` = Green, `WARM` = Yellow, `COLD` = Slate).
+
+**Verification**:
+- Verify the conversation closes smoothly and the input panel instantly vanishes.
+- Verify the Completion Panel correctly renders the CheckCircle and dynamic styling.
+- Verify the generated `confirmationMessage` accurately reflects the summary without grammar issues.
+
+# Phase 23: Sales Rep Dashboard
+
+**Goal**: Sales reps have a single, efficient interface to view, prioritise, and act on all incoming qualified leads.
+
+**What was completed**:
+1. **Backend Endpoints**: Created `LeadController` exposing `GET /leads`, `GET /leads/:id`, and `PATCH /leads/:id`. The list endpoint correctly aggregates the `industryName` from the related config.
+2. **Persistent Admin Layout**: Implemented `apps/web/app/dashboard/layout.tsx` and the `Sidebar` component using the premium Navy background (`bg-primary`), Lucide icons, and Next.js routing.
+3. **Pipeline Table**: Constructed the `LeadPipeline` client component leveraging our existing UI `Table`. It displays Contact Name, Industry, Truncated Summary, Tier, Status, Date, and Actions.
+4. **CRM Functionality**: 
+   - **Real-time**: Implemented a 30-second polling interval (with strict component unmount cleanup) and a manual Refresh button.
+   - **Status Management**: Sales reps can now use the inline dropdown to change lead status across `NEW`, `CONTACTED`, `QUALIFIED`, `WON`, and `LOST` with an immediate PATCH and localized loading spinner. `TRANSFERRED` is locked to read-only logic.
+
+**Verification**:
+- Log into the dashboard and verify the new Navy sidebar and active route highlighting.
+- Check the Leads table and verify it fetches and renders correctly.
+- Test changing a status inline and confirm the spinner appears and the backend successfully patches the record.
+
+
+# Phase 24: Lead Detail View
+
+**Goal**: A single, comprehensive screen where a rep can review the full AI conversation transcript, extracted structured data, and score rationale.
+
+**What was completed**:
+1. **Server Component Page**: Built `apps/web/app/dashboard/leads/[id]/page.tsx` as a Server component. It handles data fetching with `cache: 'no-store'` so reps always get the latest lead data from `GET /leads/:id`. Added an `ArrowLeft` Back to Leads button.
+2. **LeadDetailPanel**: Created a two-column client component layout.
+   - **Left Column**: Displays the Contact Info card, the Metrics Card (with the numerical Score, Tier Badge, and a derived `Strong/Moderate/Weak match` label), and the Extracted Data Grid.
+   - **Right Column**: Displays the full, chronological conversation transcript. Leveraged our existing `MessageBubble` component so it perfectly mirrors the UI of the public ChatWidget.
+3. **Data Formatting**: 
+   - Applied the `formatFieldKey` function to convert raw database keys (like `move_type`) into human-readable labels (`Move Type`).
+   - Implemented colored confidence dots using Tailwind `bg-green-500`, `bg-yellow-500`, `bg-slate-400`, and `bg-red-500`. Added a tooltip `"Low confidence — verify with customer"` to fields with `< 0.6` confidence.
+4. **Integration**: Wired up the Status dropdown to instantly patch the status back to the database. Updated the `LeadPipeline` table with a `View` button linking directly to this new page.
+
+**Verification**:
+- From the Dashboard, click **View** on any lead row.
+- Verify the Lead Detail View renders perfectly with the two-column layout.
+- Review the transcript on the right to ensure user messages are blue (right-aligned) and AI messages are gray (left-aligned).
+- Hover over the extracted data confidence dots to verify tooltips and color accuracy.
+
+
+# Phase 25: Admin Configuration Console
+
+**Goal**: A non-technical admin interface to create, edit, and preview AI Agents dynamically.
+
+**What was completed**:
+1. **Live Preview API**: Built `POST /industry-configs/preview` to safely generate a live AI greeting and qualification prompt using an *unsaved* draft configuration payload.
+2. **Configuration List**: Built `/dashboard/configs` table showing all industry configs with active/inactive status toggles (which hit `PATCH /industry-configs/:id/status`).
+3. **Configuration Editor**:
+   - Built the massive `ConfigEditor` client component utilizing `useReducer` to seamlessly keep scoring rules in sync when qualification field keys are renamed.
+   - Enforced client-side schema validation via Zod (`ConfigFormSchema`) catching missing fields before calling the API.
+   - Integrated the "Live Preview" sidebar using our beautiful `MessageBubble` styling to test the unsaved persona response directly in the browser.
+4. **Versioning Integration**: Wired up the save logic to intelligently detect when the backend creates a *new version* (returns `versioned: true`) and dynamically pushes the router to the new `/dashboard/configs/[newId]` path so admins aren't left editing an outdated ID.
+
+**Verification**:
+- Navigate to `/dashboard/configs`.
+- Create a **New Configuration** or **Edit** an existing one.
+- Add a new Qualification Field and verify that it immediately becomes available in the Scoring Rules dropdown.
+- Click **Live Preview** and confirm it generates a response matching your persona and tone.
+- Ensure clicking **Save** gracefully persists the changes and handles the version redirection.
+
+
+# Phase 26: Analytics Dashboard
+
+**Goal**: Provide a high-level analytics overview of the AI agent's performance, lead qualification rates, and conversation volumes over the last 30 days.
+
+**What was completed**:
+1. **Analytics Summary Page**: Built the `AnalyticsPage` server component that fetches summary metrics and time-series data seamlessly from the `AnalyticsService` backend.
+2. **Tailwind Chart Visualisations**: Removed third-party charting libraries (Recharts) to keep the bundle size completely optimal. Implemented responsive, interactive, pure Tailwind CSS charts for:
+   - **Conversation Volume**: A vertical bar chart with relative percentage scaling and hover tooltips for daily counts.
+   - **Lead Tier Distribution**: A horizontal stacked bar visualizing the ratio of HOT, WARM, and COLD leads.
+   - **Lead Funnel**: A simple funnel progress bar showcasing the Conversion Rate.
+3. **Industry Breakdown**: Integrated the reusable Phase 18 `Table` component to map conversion rates, lead counts, and conversation volumes directly to their underlying Industry Configurations.
+4. **Navigation Integration**: Hooked the new Analytics route directly into the Admin Sidebar.
+
+**Verification**:
+- Navigate to the **Admin Console** and click the **Analytics** tab in the sidebar.
+- Ensure the **Total Conversations** and **Qualified Leads** metrics properly sum up the seeded values in the database.
+- Hover over the daily Volume bars and Tier distributions to verify the raw counts are rendered via native tooltips.
+- Validate that the dashboard fully respects Dark Mode color semantics.

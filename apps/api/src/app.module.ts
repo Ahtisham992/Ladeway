@@ -29,6 +29,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { QualificationModule } from './qualification/qualification.module';
 import { ConversationModule } from './conversation/conversation.module';
 import { LeadModule } from './lead/lead.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { LeadModule } from './lead/lead.module';
     QualificationModule,
     ConversationModule,
     LeadModule,
+    AnalyticsModule,
   ],
   controllers: [HealthController],
   providers: [],

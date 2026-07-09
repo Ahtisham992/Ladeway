@@ -65,11 +65,18 @@ export class ExtractorService {
       }
     }
 
-    // Standard contact keys (universal across industries)
-    const contactKeys = ['name', 'email', 'phone'];
-    for (const key of contactKeys) {
-      if (key in parsed) {
-        result[key] = this.parseField(parsed[key]);
+    const contactMapping: Record<string, string[]> = {
+      'name': ['name', 'full_name', 'customer_name'],
+      'email': ['email', 'email_address'],
+      'phone': ['phone', 'phone_number', 'mobile']
+    };
+
+    for (const [canonicalKey, aliases] of Object.entries(contactMapping)) {
+      for (const alias of aliases) {
+        if (alias in parsed && parsed[alias] !== null) {
+          result[canonicalKey] = this.parseField(parsed[alias]);
+          break;
+        }
       }
     }
 

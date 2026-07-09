@@ -30,10 +30,17 @@ export class ConversationService {
   async startConversation(configId: string): Promise<StartConversationResponse> {
     const config = await this.configService.getActiveConfig(configId) as any;
     
+    if (!config || !config.isActive) {
+      throw new NotFoundException('Configuration not found or inactive');
+    }
+    
     const fieldsJson = config.fieldsJson as any[];
     const missingFields = fieldsJson
       .filter(f => f.required)
       .map(f => f.key);
+
+    // Always require intrinsic contact fields
+    missingFields.push('name', 'email', 'phone');
 
     // Using $system (bypasses RLS) because this is a PUBLIC endpoint.
     // Authentication here is via sessionToken (a secure random CUID),
@@ -64,6 +71,10 @@ export class ConversationService {
       missingFields,
       status: ConversationStatus.QUALIFYING,
       turnCount: 1,
+      configSnapshot: {
+        fieldsJson: config.fieldsJson,
+        scoringRulesJson: config.scoringRulesJson
+      }
     });
 
     // Persist the AI greeting
@@ -93,6 +104,11 @@ export class ConversationService {
     }
 
     const config = await this.configService.getActiveConfig(session.configId) as any;
+    
+    if (session.configSnapshot) {
+      config.fieldsJson = session.configSnapshot.fieldsJson;
+      config.scoringRulesJson = session.configSnapshot.scoringRulesJson;
+    }
 
     // Persist user message
     await this.prisma.$system.message.create({
@@ -208,7 +224,7 @@ export class ConversationService {
     if (nextAction === QualificationAction.TRIGGER_TRANSFER) {
       newStatus = ConversationStatus.TRANSFERRED;
     } else if (nextAction === QualificationAction.CLOSE_CONVERSATION) {
-      newStatus = ConversationStatus.CLOSED;
+      newStatus = ConversationStatus.SCORED;
     }
 
     const updatedSession = await this.sessionService.updateSession(sessionToken, {
@@ -217,7 +233,10 @@ export class ConversationService {
     });
 
     // If terminal state, update the DB record too
-    if (newStatus === ConversationStatus.CLOSED || newStatus === ConversationStatus.TRANSFERRED) {
+    let finalLead = null;
+    let confirmationMessage = undefined;
+
+    if (newStatus === ConversationStatus.SCORED || newStatus === ConversationStatus.TRANSFERRED || newStatus === ConversationStatus.CLOSED) {
       await this.prisma.$system.conversation.update({
         where: { id: session.conversationId },
         data: {
@@ -226,10 +245,24 @@ export class ConversationService {
         },
       });
       
-      // Phase 12: Trigger Lead Creation asynchronously
-      this.leadService.createLeadFromConversation(session.conversationId).catch(err => {
+      try {
+        finalLead = await this.leadService.createLeadFromConversation(session.conversationId);
+        
+        if (newStatus === ConversationStatus.SCORED && finalLead?.summary) {
+          const rawMessage = `Thank you — ${finalLead.summary
+            .replace(/^[A-Z][a-z]+ (is|has|seeks|wants|needs)/,
+              (match: string) => `we've noted that you ${match.split(' ').slice(1).join(' ')}`)
+            .toLowerCase()
+            .replace(/^./, (c: string) => c.toUpperCase())
+          }. A member of our team will be in touch with you shortly.`;
+
+          confirmationMessage = rawMessage.length > 20 
+            ? rawMessage 
+            : `Thank you — a member of our team will be in touch with you shortly.`;
+        }
+      } catch (err: any) {
         this.logger.error(`Failed to create lead for conversation ${session.conversationId}`, err.stack);
-      });
+      }
     }
 
     // Yield a final JSON chunk so the controller can send the `event: done` with state
@@ -237,6 +270,9 @@ export class ConversationService {
       _done: true,
       status: updatedSession!.status,
       turnCount: updatedSession!.turnCount,
+      confirmationMessage,
+      conversationId: session.conversationId,
+      tier: finalLead?.tier || undefined
     });
   }
 

@@ -12,9 +12,14 @@
   },
   "dependencies": {
     "@ladeway/types": "*",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
+    "lucide-react": "^1.23.0",
     "next": "14.2.29",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^3.6.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^20",
@@ -24,8 +29,8 @@
     "eslint": "^8",
     "eslint-config-next": "14.2.29",
     "postcss": "^8.4.47",
+    "rimraf": "^6.0.0",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5.7.0",
-    "rimraf": "^6.0.0"
+    "typescript": "^5.7.0"
   }
 }

@@ -38,7 +38,33 @@ export class IndustryConfigService {
     });
   }
 
+  async getPublicConfigs(tenantId?: string) {
+    const whereClause: any = { isActive: true };
+    if (tenantId) {
+      whereClause.tenantId = tenantId;
+    }
+    
+    return this.prisma.$system.industryConfig.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        industryName: true,
+        personaName: true,
+        greeting: true,
+        tenantId: true,
+        tenant: {
+          select: {
+            name: true,
+            subdomain: true,
+          }
+        }
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+  }
+
   async findOne(id: string) {
+    if (!id) throw new NotFoundException('Configuration ID is required');
     const config = await this.prisma.$system.industryConfig.findUnique({
       where: { id },
     });
@@ -63,36 +89,50 @@ export class IndustryConfigService {
     return config;
   }
 
-  async update(id: string, data: UpdateIndustryConfigDto) {
-    // Verify existence
-    await this.findOne(id);
-
+  async update(id: string, data: UpdateIndustryConfigDto): Promise<{ id: string, versioned: boolean }> {
+    const config = await this.findOne(id);
+    
+    // In-place update
     const updateData: any = { ...data };
     if (data.fieldsJson) updateData.fieldsJson = data.fieldsJson as any;
     if (data.scoringRulesJson) updateData.scoringRulesJson = data.scoringRulesJson as any;
 
-    const config = await this.prisma.industryConfig.update({
+    try {
+      const updated = await this.prisma.industryConfig.update({
+        where: { id },
+        data: updateData,
+      });
+
+      // Invalidate cache
+      await this.cacheManager.del(`config:${id}`);
+
+      return { id, versioned: false };
+    } catch (error) {
+      console.error('Update failed:', error);
+      throw error;
+    }
+  }
+
+  async updateStatus(id: string, isActive: boolean) {
+    const config = await this.findOne(id);
+    const updated = await this.prisma.industryConfig.update({
       where: { id },
-      data: updateData,
+      data: { isActive },
     });
-
-    // Invalidate cache
     await this.cacheManager.del(`config:${id}`);
-
-    return config;
+    return updated;
   }
 
   async remove(id: string) {
     const config = await this.findOne(id);
 
-    // Guard against deleting configs that are actively used in conversations
-    const activeConversations = await this.prisma.conversation.count({
+    const conversationCount = await this.prisma.conversation.count({
       where: { configId: id },
     });
 
-    if (activeConversations > 0) {
+    if (conversationCount > 0) {
       throw new ConflictException(
-        `Cannot delete IndustryConfig because it is linked to ${activeConversations} active conversation(s).`
+        `Cannot delete IndustryConfig because it is linked to ${conversationCount} conversation(s). Please deactivate it instead.`
       );
     }
 

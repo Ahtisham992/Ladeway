@@ -17,4 +17,8 @@ export interface ConversationSession {
   missingFields: string[];
   turnCount: number;
   lastActivityAt: string;
+  configSnapshot?: {
+    fieldsJson: any;
+    scoringRulesJson: any;
+  };
 }
