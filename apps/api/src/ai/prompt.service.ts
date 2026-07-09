@@ -56,7 +56,6 @@ If all required fields are collected, gracefully inform the user that you have e
     const fieldsJson = config.fieldsJson as any[];
     
     const missingFieldsMap = fieldsJson
-      .filter(f => session.missingFields.includes(f.key))
       .map(f => `"${f.key}": ${f.label} — hint: ${f.extractionHint}`)
       .join('\n');
 

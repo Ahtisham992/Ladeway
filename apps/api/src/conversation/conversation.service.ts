@@ -39,8 +39,8 @@ export class ConversationService {
       .filter(f => f.required)
       .map(f => f.key);
 
-    // Always require intrinsic contact fields
-    missingFields.push('name', 'email', 'phone');
+    // We no longer hardcode contact fields into missingFields.
+    // If the admin wants them to be required to close the chat, they must add them as required custom fields.
 
     // Using $system (bypasses RLS) because this is a PUBLIC endpoint.
     // Authentication here is via sessionToken (a secure random CUID),
@@ -179,7 +179,12 @@ export class ConversationService {
       const newMissingFields = [...currentSession.missingFields];
       
       for (const [key, field] of Object.entries(extractionResult)) {
-        if (field.value !== null) {
+        if (field.value !== null && field.value !== undefined) {
+          // If the extracted value is literally the string "null" (which LLMs sometimes output), ignore it
+          if (typeof field.value === 'string' && field.value.toLowerCase() === 'null') {
+            continue;
+          }
+
           extractedValues[key] = field.value;
           newExtractedData.push({
             conversationId: currentSession.conversationId,
@@ -188,7 +193,7 @@ export class ConversationService {
             confidence: field.confidence
           });
           
-          if (field.confidence >= 0.6) {
+          if (field.confidence >= 0.4) {
             const index = newMissingFields.indexOf(key);
             if (index !== -1) {
               newMissingFields.splice(index, 1);

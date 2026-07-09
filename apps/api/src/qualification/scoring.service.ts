@@ -49,9 +49,11 @@ export class ScoringService {
         return Number(value) < Number(rule.value);
       case 'in':
         if (Array.isArray(rule.value)) {
-          return rule.value.map(String).map(s => s.toLowerCase()).includes(value.toLowerCase());
+          return rule.value.map(String).map(s => s.toLowerCase()).some(target => value.toLowerCase().includes(target));
         }
-        return false;
+        // Support comma-separated strings from the UI input
+        const targets = String(rule.value).split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+        return targets.some(target => value.toLowerCase().includes(target));
       default:
         return false;
     }

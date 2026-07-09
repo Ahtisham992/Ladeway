@@ -58,10 +58,8 @@ export class ExtractorService {
 
     const fieldsJson = config.fieldsJson as any[];
     for (const field of fieldsJson) {
-      if (session.missingFields.includes(field.key)) {
-        if (field.key in parsed) {
-          result[field.key] = this.parseField(parsed[field.key]);
-        }
+      if (field.key in parsed) {
+        result[field.key] = this.parseField(parsed[field.key]);
       }
     }
 
