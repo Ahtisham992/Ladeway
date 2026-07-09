@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { Sidebar } from '../../components/admin/Sidebar';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { HelpWidget } from '@/components/ui/HelpWidget';
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const token = cookies().get('access_token')?.value;
@@ -13,8 +14,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-screen bg-background">
       <Sidebar />
-      <main className="flex-1 overflow-auto p-8">
+      <main className="flex-1 overflow-auto p-8 relative">
         {children}
+        <HelpWidget context="admin" />
       </main>
     </div>
   );
