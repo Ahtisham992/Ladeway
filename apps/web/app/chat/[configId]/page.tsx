@@ -6,6 +6,7 @@ import { useConversationSession } from "@/hooks/useConversationSession"
 import { ChatWidget } from "@/components/chat/ChatWidget"
 import { Spinner } from "@/components/ui/Spinner"
 import { AlertCircle } from "lucide-react"
+import { HelpWidget } from "@/components/ui/HelpWidget"
 
 export default function ChatPage() {
  const params = useParams()
@@ -78,6 +79,7 @@ export default function ChatPage() {
  />
  </div>
  </div>
+ <HelpWidget context="chat" />
  </div>
  )
 }
