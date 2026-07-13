@@ -1,147 +1,145 @@
-# Ladeway: Comprehensive End-to-End Black Box Test Plan
+# Ladeway — Manual End-to-End Test Plan
 
-**Document Version:** 1.0
-**Target System:** Ladeway AI Conversational Intelligence Platform
-**Testing Methodology:** Black Box / Manual End-to-End (E2E) Workflow
+**Tailored for Logicstics International Moving & Freight**
 
-## Objective
-To rigorously validate the complete lifecycle of the Ladeway platform in a production-like environment. This test plan covers tenant registration, complex AI configuration (multi-field extraction & multi-rule scoring), realistic multi-turn AI interactions, and the downstream CRM pipeline evaluation.
-
----
-
-## Phase 1: System Initialization & Onboarding
-**Objective:** Verify tenant creation, authentication routing, and isolated workspace generation.
-
-**Execution Steps:**
-1. Open a fresh browser session and navigate to the root application (`http://localhost:3000`).
-2. Click **Get Started** to access the registration flow.
-3. Complete the Signup form with the following credentials:
-   - **Company Name:** `Global Freight Solutions QA`
-   - **Email:** `qa.admin@globalfreight.test`
-   - **Password:** `Testing123!@#`
-4. Click **Sign up**.
-5. **Expected Verification:** The system must automatically authenticate the user, generate a secure tenant workspace, and redirect to the Admin Console (`/dashboard/overview`).
+**Document Version:** 1.0  
+**Company:** Logicstics · 2929 Arch Street, Suite 1700, Philadelphia, PA 19104  
+**Interviewer:** Neal Elbaum, CEO  
+**Prepared by:** Muhammad Ahtisham  
+**Testing Environment:** Live deployed application  
 
 ---
 
-## Phase 2: Complex AI Configuration (Logistics Persona)
-**Objective:** Validate that the system can handle complex, multi-dimensional qualification structures and complex persona definitions.
+## Overview
 
-**Execution Steps:**
-1. Navigate to **Configurations** via the left sidebar and click **Create New Configuration**.
-2. **Define Base Persona:**
-   - **Industry Name:** `Enterprise Logistics & Freight`
-   - **Persona Name:** `Sarah - Senior Logistics Coordinator`
-   - **Greeting:** `Welcome to Global Freight Solutions! I'm Sarah. To help route you to the right freight specialist, could you tell me a bit about what you're looking to ship today and where it's going?`
-3. Click **Create & Continue**.
+This document walks through the complete Ladeway platform lifecycle as it applies specifically to Logicstics — an international moving and freight forwarding company. Every test case, persona, field, and scoring rule in this document reflects real Logicstics business scenarios: residential international moves, commercial freight shipments, and vehicle transport.
 
-### 2.1 Define Multiple Qualification Fields
-In the Config Editor, add the following four distinct fields to stress-test data extraction:
+The goal is to demonstrate that Ladeway captures the same information a Logicstics sales rep would gather on a phone call — automatically, through natural conversation, 24 hours a day.
 
-1. **Field 1: Volume**
-   - **Key:** `shipping_volume` | **Label:** `Monthly Volume` | **Type:** `text`
-   - **Hint:** `Extract the volume or size of the freight (e.g., '10 TEU containers', '5 pallets', 'one small box').`
-2. **Field 2: Frequency**
-   - **Key:** `shipping_frequency` | **Label:** `Shipping Frequency` | **Type:** `text`
-   - **Hint:** `Extract how often they ship (e.g., 'weekly', 'monthly', 'one-time only').`
-3. **Field 3: Budget**
-   - **Key:** `monthly_budget` | **Label:** `Monthly Budget` | **Type:** `text`
-   - **Hint:** `Extract any mentioned budget or spend amount (e.g., '$10,000+', 'under $500').`
-4. **Field 4: Destination**
-   - **Key:** `destination_region` | **Label:** `Destination` | **Type:** `text`
-   - **Hint:** `Extract the destination country or continent.`
+## What We Are Testing
 
-### 2.2 Define Multi-Tiered Scoring Rules
-Navigate to the **Scoring Rules** tab and construct a complex evaluation matrix:
+| Layer | What it proves |
+| :--- | :--- |
+| **AI Conversation** | Alexandra qualifies customers naturally, one question at a time |
+| **Field Extraction** | Structured data pulled from free-form conversation |
+| **Lead Scoring** | HOT / WARM / COLD tiering based on Logicstics-specific rules |
+| **Sales Dashboard** | Reps see qualified leads instantly with full context |
+| **Config Console** | Non-technical admin can update Alexandra without a developer |
+| **Multi-Tenancy** | Logicstics data is completely isolated from other tenants |
 
-- **Rule 1 (Enterprise / HOT):**
-  - Field: `shipping_volume` | Condition: `Contains` | Value: `containers` | Weight: `1.0` | Tier: `HOT`
-- **Rule 2 (Enterprise / HOT):**
-  - Field: `monthly_budget` | Condition: `Contains` | Value: `10000` | Weight: `1.0` | Tier: `HOT`
-- **Rule 3 (Mid-Market / WARM):**
-  - Field: `shipping_volume` | Condition: `Contains` | Value: `pallets` | Weight: `0.5` | Tier: `WARM`
-- **Rule 4 (Mid-Market / WARM):**
-  - Field: `shipping_frequency` | Condition: `Contains` | Value: `weekly` | Weight: `0.5` | Tier: `WARM`
-- **Rule 5 (Consumer / COLD):**
-  - Field: `shipping_frequency` | Condition: `Contains` | Value: `one-time` | Weight: `0.1` | Tier: `COLD`
-- **Rule 6 (Consumer / COLD):**
-  - Field: `shipping_volume` | Condition: `Contains` | Value: `box` | Weight: `0.1` | Tier: `COLD`
+## Pre-Test Setup
 
-**Save the configuration.** Ensure a success toast appears and settings persist upon page refresh.
+Before running any tests, confirm the following:
+
+- [x] Backend running on Railway (or `localhost:3001`)
+- [x] Frontend running on Vercel (or `localhost:3000`)
+- [x] Logicstics tenant seeded in database
+- [x] Alexandra (Logistics config) is active
+- [x] Admin credentials ready: `admin@logicstics.com`
+- [x] Open two browser windows:
+    - **Window 1** — Customer view (Incognito)
+    - **Window 2** — Admin dashboard (normal)
 
 ---
 
-## Phase 3: Conversational AI Stress Testing
-**Objective:** Conduct rigorous, multi-turn dialogues to ensure the AI acts contextually, dynamically extracts multiple fields, and routes logic correctly.
+## The Logicstics AI Configuration (Alexandra)
 
-*Note: Open the **Live Chat Demo** link (`/chat/[configId]`) in an Incognito window for these tests to ensure fresh session state.*
+This is the seeded configuration Alexandra uses. Understand this before testing. If you are starting fresh, build this configuration in the **Config Editor** first.
 
-### Test Case 3A: The "HOT" Enterprise Lead
-**Context:** A large manufacturer needing high-volume international shipping.
-**Execution Script:**
-- **AI:** *[Sends standard greeting]*
-- **User:** "Hi Sarah, we are a manufacturing firm based in Ohio. We need to set up a new supply chain route to Germany."
-- **AI:** *[Should acknowledge Germany (Destination) and ask about volume/frequency]*
-- **User:** "We manufacture heavy industrial parts. We're looking at moving roughly 15 containers."
-- **AI:** *[Should acknowledge containers (Volume) and ask about frequency/budget]*
-- **User:** "This would be a monthly operation. Our logistics budget for this specific route is around $15,000 to $20,000."
-- **AI:** *[Should wrap up the qualification seamlessly]*
-- **User:** "Thanks, please have sales contact me at enterprise@ohio-mfg.com."
-**Action:** Reset the chat.
+### Persona:
+- **Name:** Alexandra
+- **Role:** Logistics Coordinator at Logicstics
+- **Tone:** Professional
+- **Greeting:** "Hi there! I'm Alexandra with Logicstics. I can help you get an accurate quote for your move. To start, are you moving a home or an office?"
 
-### Test Case 3B: The "WARM" Mid-Market Lead
-**Context:** A growing e-commerce brand looking for domestic distribution.
-**Execution Script:**
-- **AI:** *[Sends standard greeting]*
-- **User:** "Hello. We run an online furniture store and need a new shipping partner for North America."
-- **AI:** *[Should ask for specifics on volume or frequency]*
-- **User:** "We don't ship full containers. Usually, it's LTL (Less Than Truckload). We send out about 12 pallets of flat-packed furniture."
-- **AI:** *[Should ask about frequency or budget]*
-- **User:** "We ship these pallets out weekly to our distribution hubs. Budget is flexible depending on transit times."
-- **User:** "My email is logistics@furnituredirect.com."
-**Action:** Reset the chat.
+### Qualification Fields Alexandra Gathers:
+*(Make sure to check "Required for Qualification" for the required fields)*
 
-### Test Case 3C: The "COLD" Consumer Lead
-**Context:** An individual trying to ship a personal item.
-**Execution Script:**
-- **AI:** *[Sends standard greeting]*
-- **User:** "Hey, I need to send a gift to my grandson."
-- **AI:** *[Should politely ask what they are shipping and where]*
-- **User:** "It's just going to Canada. It's a single cardboard box, maybe weighs 5 pounds."
-- **AI:** *[Should ask about frequency]*
-- **User:** "Oh, it's just a one-time thing for his birthday. I don't have a big budget, hoping to keep it under $50."
-- **User:** "Email is grandpa.joe@email.com."
-**Action:** Close the window.
+| Field Key | Label | Required | What Alexandra is asking |
+| :--- | :--- | :--- | :--- |
+| `move_type` | Move Type | Yes | Residential, commercial, or specialty cargo |
+| `origin` | Origin City | Yes | Where the shipment starts |
+| `destination` | Destination Country | Yes | Where it is going |
+| `timeline` | Preferred Timeline | Yes | When they need to move |
+| `cargo` | Cargo Description | Yes | What is being moved (furniture, equipment, vehicle) |
+| `name` | Customer Name | No | Customer's full name |
+| `email` | Email Address | No | Contact email |
+| `phone` | Phone Number | No | Contact phone |
+
+### Scoring Rules:
+Configure these rules in the **Scoring Rules** tab to grade incoming logistics leads:
+
+- **Rule 1 (HOT):** `move_type` | Contains any of | `commercial, office` | Weight: 1.0
+- **Rule 2 (HOT):** `cargo` | Contains any of | `equipment, vehicles, machinery` | Weight: 1.0
+- **Rule 3 (WARM):** `move_type` | Contains any of | `residential, home` | Weight: 0.5
+- **Rule 4 (WARM):** `destination` | Contains any of | `UK, Europe, Australia` | Weight: 0.5
+- **Rule 5 (COLD):** `cargo` | Contains any of | `single box, few items, suitcase` | Weight: 0.1
+- **Rule 6 (COLD):** `timeline` | Contains any of | `just browsing, next year, no rush` | Weight: 0.1
 
 ---
 
-## Phase 4: CRM Pipeline & Extraction Verification
-**Objective:** Verify that the backend analytics engine successfully processed the raw chat transcripts, triggered the regex/semantic scoring conditions, and populated the Lead Pipeline accurately.
+## Test Scenarios: Live Chat Simulation
 
-**Execution Steps:**
-1. Return to the Admin Console and navigate to **Leads**.
-2. **Verify HOT Pipeline Column:**
-   - Locate the lead from `enterprise@ohio-mfg.com`.
-   - Click to open the Lead Detail Panel.
-   - **Assertions:** 
-     - Score should be **HOT**.
-     - `shipping_volume` must contain '15 containers'.
-     - `monthly_budget` must contain '$15,000'.
-     - `destination_region` must contain 'Germany'.
-3. **Verify WARM Pipeline Column:**
-   - Locate the lead from `logistics@furnituredirect.com`.
-   - Click to open the Lead Detail Panel.
-   - **Assertions:**
-     - Score should be **WARM**.
-     - `shipping_volume` must contain '12 pallets'.
-     - `shipping_frequency` must contain 'weekly'.
-     - `destination_region` must contain 'North America'.
-4. **Verify COLD Pipeline Column:**
-   - Locate the lead from `grandpa.joe@email.com`.
-   - Click to open the Lead Detail Panel.
-   - **Assertions:**
-     - Score should be **COLD**.
-     - `shipping_volume` must contain 'cardboard box'.
-     - `shipping_frequency` must contain 'one-time'.
+Open an **Incognito Window** and navigate to your agent's Live Chat Demo page (`/chat/[configId]`). Follow these exact scripts to simulate different types of Logicstics customers.
 
-**Sign-off:** If all fields are extracted correctly across multi-turn dialogues and the tiering logic routes each lead to the exact pipeline column designated, the system's core conversational intelligence and CRM engine are functioning at 100% capacity.
+### Test Case 1: The HOT Lead (Commercial Freight)
+**Context:** A high-value corporate client looking to move heavy machinery across the country immediately.
+
+**Script:**
+- **AI (Alexandra):** *"Hi there! I'm Alexandra with Logicstics. I can help you get an accurate quote for your move. To start, are you moving a home or an office?"*
+- **User:** "Hi Alexandra, we are moving our commercial manufacturing plant."
+- **AI:** *(Should acknowledge commercial move and ask for origin/destination or cargo)*
+- **User:** "We are moving heavy industrial machinery and factory equipment from Detroit, Michigan down to Monterrey, Mexico."
+- **AI:** *(Should capture origin: Detroit, destination: Mexico, cargo: machinery, and ask for timeline)*
+- **User:** "We need this equipment moved ASAP. Ideally by next week."
+- **AI:** *(Should ask for contact details)*
+- **User:** "My name is John Davis, email is jdavis@detroitmanufacturing.com, and phone is 555-0199."
+- **AI:** *"I have everything I need to get you a quote..." (Conversation closes)*
+
+**Verification (Admin Console -> Leads):**
+- **Score:** HOT (Triggers Rule 1 and Rule 2)
+- **Data Extracted:** `move_type`: commercial | `origin`: Detroit | `destination`: Mexico | `timeline`: ASAP/next week | `cargo`: heavy machinery/equipment
+
+---
+
+### Test Case 2: The WARM Lead (Residential International Move)
+**Context:** A family relocating overseas, representing a standard high-margin residential move.
+
+**Script:**
+- **AI (Alexandra):** *"Hi there! I'm Alexandra with Logicstics. I can help you get an accurate quote for your move. To start, are you moving a home or an office?"*
+- **User:** "We are moving our home."
+- **AI:** *(Should ask for origin/destination)*
+- **User:** "We are moving from our 4-bedroom house in Philadelphia to London, UK."
+- **AI:** *(Should ask for cargo or timeline)*
+- **User:** "We are taking all our household furniture, beds, and a grand piano. We plan to move in about two months."
+- **AI:** *(Should ask for contact details)*
+- **User:** "I can be reached at sarah.smith@email.com."
+- **AI:** *"I have everything I need to get you a quote..." (Conversation closes)*
+
+**Verification (Admin Console -> Leads):**
+- **Score:** WARM (Triggers Rule 3 and Rule 4)
+- **Data Extracted:** `move_type`: residential/home | `origin`: Philadelphia | `destination`: London, UK | `timeline`: in two months | `cargo`: household furniture, grand piano
+
+---
+
+### Test Case 3: The COLD Lead (Low Value / Single Item)
+**Context:** A consumer looking to ship a single low-value item with no urgency.
+
+**Script:**
+- **AI (Alexandra):** *"Hi there! I'm Alexandra with Logicstics. I can help you get an accurate quote for your move. To start, are you moving a home or an office?"*
+- **User:** "Just a residential home."
+- **AI:** *(Should ask for origin/destination)*
+- **User:** "I'm in Boston, and I just need to send something to Florida."
+- **AI:** *(Should ask for cargo/timeline)*
+- **User:** "I just have a single box of old clothes. I am just browsing for prices right now, absolutely no rush."
+- **AI:** *(Should ask for contact details)*
+- **User:** "mike@email.com"
+- **AI:** *"I have everything I need to get you a quote..." (Conversation closes)*
+
+**Verification (Admin Console -> Leads):**
+- **Score:** COLD (Triggers Rule 5 and Rule 6)
+- **Data Extracted:** `move_type`: residential | `origin`: Boston | `destination`: Florida | `timeline`: no rush / browsing | `cargo`: single box
+
+---
+
+**Testing Complete.** If all three scenarios extract the correct fields and route to the proper CRM columns, Ladeway's core qualification and analytics engine is fully validated for Logicstics.
