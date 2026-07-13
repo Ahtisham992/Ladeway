@@ -12,7 +12,8 @@ export async function login(formData: FormData) {
   }
 
   try {
-    const res = await fetch('http://localhost:3001/auth/login', {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || 'http://localhost:3001';
+    const res = await fetch(`${baseUrl}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
