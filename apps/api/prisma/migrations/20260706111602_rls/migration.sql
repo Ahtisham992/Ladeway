@@ -1,24 +1,17 @@
 -- Enable RLS on all tenant-scoped tables
 ALTER TABLE "IndustryConfig" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "IndustryConfig" FORCE ROW LEVEL SECURITY;
 
 ALTER TABLE "User" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "User" FORCE ROW LEVEL SECURITY;
 
 ALTER TABLE "Conversation" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "Conversation" FORCE ROW LEVEL SECURITY;
 
 ALTER TABLE "Message" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "Message" FORCE ROW LEVEL SECURITY;
 
 ALTER TABLE "ExtractedData" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "ExtractedData" FORCE ROW LEVEL SECURITY;
 
 ALTER TABLE "Lead" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "Lead" FORCE ROW LEVEL SECURITY;
 
 ALTER TABLE "LeadAssignment" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "LeadAssignment" FORCE ROW LEVEL SECURITY;
 
 -- Create policies for tenant isolation
 CREATE POLICY tenant_isolation_industry_config ON "IndustryConfig"
@@ -74,7 +67,4 @@ CREATE POLICY tenant_isolation_lead_assignment ON "LeadAssignment"
 -- Also, to allow seeding and bypass RLS for admin operations (like creating tenants), we can use the bypassrls role 
 -- or we can explicitly allow the postgres superuser (postgres). By default, superusers bypass RLS.
 -- Since the Prisma pool uses postgres, it might actually bypass RLS unless we force it!
--- "ALTER TABLE ... FORCE ROW LEVEL SECURITY" forces RLS even for table owners. 
--- Wait, if we use FORCE ROW LEVEL SECURITY, then the `postgres` user will ALSO be blocked unless we conditionally bypass it.
--- Supabase `postgres` user does NOT bypass RLS if FORCE ROW LEVEL SECURITY is used and there's no policy for it.
 -- Actually, the spec just says "ALTER TABLE conversations ENABLE ROW LEVEL SECURITY; CREATE POLICY...". I'll stick to that.

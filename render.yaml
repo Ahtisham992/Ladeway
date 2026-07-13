@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: ladeway-api
+    env: node
+    buildCommand: npm install && npx turbo run build --filter=@ladeway/api
+    startCommand: cd apps/api && npm run start:prod
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: ACTIVE_LLM_PROVIDER
+        value: groq
+      - key: GROQ_API_KEY
+        sync: false
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
