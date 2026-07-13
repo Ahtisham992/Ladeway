@@ -2,7 +2,7 @@ services:
   - type: web
     name: ladeway-api
     env: node
-    buildCommand: npm install && npx prisma generate --schema=apps/api/prisma/schema.prisma && npx turbo run build --filter=@ladeway/api
+    buildCommand: npm install && cd apps/api && npx prisma generate && cd ../.. && npx turbo run build --filter=@ladeway/api
     startCommand: cd apps/api && npm run start:prod
     envVars:
       - key: DATABASE_URL
