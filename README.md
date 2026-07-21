@@ -1,7 +1,7 @@
 # Ladeway Platform
 
 <div align="center">
-  <img src=".github/assets/ladeway_logo.png" alt="Ladeway Logo" width="200" />
+  <img src="./.github/assets/ladeway_logo.png" alt="Ladeway Logo" width="200" />
 </div>
 
 <p align="center">
@@ -103,9 +103,7 @@ We welcome contributions! Please see our [CONTRIBUTORS.md](CONTRIBUTORS.md) for 
 
 ### Core Contributors
 
-<a href="https://github.com/Ahtisham992/Ladeway/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=Ahtisham992/Ladeway" />
-</a>
+
 
 - **Muhammad Ahtisham** ([@Ahtisham992](https://github.com/Ahtisham992)) - Lead Developer & Architect
 - **Neal Elbaum** - Product Strategy & CEO
