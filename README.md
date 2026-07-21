@@ -99,7 +99,7 @@ The frontend will be available at `http://localhost:3000` and the API at `http:/
 
 ## Contributing
 
-We welcome contributions! Please see our [CONTRIBUTORS.md](CONTRIBUTORS.md) for details on how you can help improve Ladeway.
+We welcome contributions! Please see our [CONTRIBUTING.md](CONTRIBUTING.md) for details on how you can help improve Ladeway.
 
 ### Core Contributors
 
