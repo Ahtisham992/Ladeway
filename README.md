@@ -1,7 +1,7 @@
-# 🚀 Ladeway Platform
+# Ladeway Platform
 
 <div align="center">
-  <img src="ladeway_logo_1783600265966.png" alt="Ladeway Logo" width="200" />
+  <img src=".github/assets/ladeway_logo.png" alt="Ladeway Logo" width="200" />
 </div>
 
 <p align="center">
@@ -15,11 +15,11 @@
 
 ---
 
-## 🌟 Overview
+## Overview
 
 Ladeway is a multi-tenant, industry-agnostic SaaS platform that harnesses the power of AI to qualify leads through natural conversation. Whether you operate in logistics, real estate, insurance, or legal services, Ladeway allows you to configure an AI agent with a custom persona, define specific qualification fields, set scoring rules, and deploy a branded chat interface directly to your customers.
 
-## ✨ Features
+## Features
 
 - **Multi-Tenant Architecture:** Securely isolated environments for different businesses.
 - **Industry Agnostic:** Fully customizable AI personas and qualification rules.
@@ -28,7 +28,7 @@ Ladeway is a multi-tenant, industry-agnostic SaaS platform that harnesses the po
 - **Real-Time Analytics:** Track lead volume, qualification rates, and conversation sentiment.
 - **Role-Based Access Control:** Row-Level Security (RLS) ensuring data privacy.
 
-## 🛠 Tech Stack
+## Tech Stack
 
 The platform is built on a modern, high-performance monorepo architecture:
 
@@ -39,7 +39,7 @@ The platform is built on a modern, high-performance monorepo architecture:
 - **AI Inference:** Groq / Ollama / OpenAI
 - **Deployment:** Vercel (Frontend), Render (Backend)
 
-## 📁 Repository Structure
+## Repository Structure
 
 This project uses Turborepo for ultra-fast monorepo builds.
 
@@ -55,7 +55,7 @@ ladeway/
 └── package.json    → Root workspace configuration
 ```
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 - Node.js >= 20.0.0
@@ -97,11 +97,20 @@ ladeway/
 
 The frontend will be available at `http://localhost:3000` and the API at `http://localhost:3001`.
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! Please see our [CONTRIBUTORS.md](CONTRIBUTORS.md) for details on how you can help improve Ladeway.
 
-## 📄 License
+### Core Contributors
+
+<a href="https://github.com/Ahtisham992/Ladeway/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Ahtisham992/Ladeway" />
+</a>
+
+- **Muhammad Ahtisham** ([@Ahtisham992](https://github.com/Ahtisham992)) - Lead Developer & Architect
+- **Neal Elbaum** - Product Strategy & CEO
+
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
