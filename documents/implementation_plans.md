@@ -1520,3 +1520,65 @@ The goal of this phase is to provide the Tenant Admin with a high-level overview
 2. Verify the 4 summary cards correctly display aggregated data based on the seeded conversations.
 3. Verify the Lead Tier Distribution chart renders without errors and strictly uses the Navy/Slate color palette.
 4. Verify the Time-Series chart successfully graphs the historical conversation volume trend.
+
+
+
+
+# Epic 0: Foundation Hardening
+
+This plan outlines the execution of the building and testing phases (Phases 3-13) from Epic 0 of the Ladeway 2.0 roadmap. We have already completed Phase 1 (Technical Debt Audit) and Phase 2 (Testing Pyramid Strategy).
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Database for E2E and Integration Testing**
+> Phase 3 requires setting up an isolated test database. I will modify the Prisma configuration and package.json scripts to spin up a separate schema or database for testing so we don't pollute the development data. Is it acceptable to use Docker to spin up a local PostgreSQL instance exclusively for testing?
+
+> [!IMPORTANT]
+> **Production Hosting Migration (Phase 12)**
+> The roadmap mentions moving off the Render free tier to a paid tier on Railway, Fly.io, or a VPS. I cannot provision paid hosting on your behalf. We will skip the actual provisioning step and focus solely on the codebase readiness, or you can manually provision a database/server and provide the credentials.
+
+## Proposed Changes
+
+### Test Infrastructure Setup (Phases 3 & 4)
+
+#### [MODIFY] [package.json](file:///d:/logistics/package.json)
+- Install `jest`, `ts-jest`, `supertest`, and `@playwright/test` across the monorepo workspaces.
+- Add `test:integration` and `test:e2e` scripts.
+
+#### [NEW] [apps/api/jest-integration.json](file:///d:/logistics/apps/api/jest-integration.json)
+- Configure Jest specifically for integration testing (pointing to a different DB environment variable).
+
+#### [NEW] [apps/web/playwright.config.ts](file:///d:/logistics/apps/web/playwright.config.ts)
+- Configure Playwright to run E2E tests against the local Next.js frontend and NestJS API.
+
+### Unit & Integration Test Backfill (Phases 5-10)
+
+I will implement comprehensive test coverage for the services identified in the technical debt audit.
+
+#### [NEW] [apps/api/src/ai/llm-router.service.spec.ts](file:///d:/logistics/apps/api/src/ai/llm-router.service.spec.ts)
+- Mock the Groq/Ollama APIs and test the exponential backoff, retry logic, and error recovery.
+
+#### [NEW] [apps/api/src/auth/auth.service.spec.ts](file:///d:/logistics/apps/api/src/auth/auth.service.spec.ts)
+- Test JWT issuance, bcrypt password validation, and the system database client bypass.
+
+#### [NEW] [apps/api/src/tenant/tenant.isolation.spec.ts](file:///d:/logistics/apps/api/src/tenant/tenant.isolation.spec.ts)
+- Integration test to mathematically prove cross-tenant data leakage is blocked by RLS policies.
+
+#### [NEW] [apps/api/src/conversation/conversation.controller.spec.ts](file:///d:/logistics/apps/api/src/conversation/conversation.controller.spec.ts)
+- Integration test for `POST /conversations/start` and `/message` endpoints.
+
+### Hardening & Bug Fixes (Identified in Phase 1)
+
+#### [MODIFY] [apps/api/src/ai/llm-router.service.ts](file:///d:/logistics/apps/api/src/ai/llm-router.service.ts)
+- Fix the critical bug where incomplete JSON chunks are silently swallowed in the `catch` block during streaming, by introducing a string buffer to accumulate chunks before parsing.
+
+## Verification Plan
+
+### Automated Tests
+- Run `npm run test` to execute all unit tests.
+- Run `npm run test:integration` to ensure the database constraints and RLS contexts function correctly.
+- Run `npx playwright test` to execute the baseline smoke test.
+
+### Manual Verification
+- Review the Jest coverage report generated during Phase 11 (`npm run test -- --coverage`) to ensure critical paths (Auth, Isolation, Billing) hit the >90% coverage threshold.

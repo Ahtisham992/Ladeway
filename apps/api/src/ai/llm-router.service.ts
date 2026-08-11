@@ -89,21 +89,26 @@ export class LLMRouterService {
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
+    let buffer = '';
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
-      const lines = decoder.decode(value, { stream: true }).split('\n').filter(Boolean);
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
       for (const line of lines) {
+        if (!line.trim()) continue;
         try {
           const chunk = JSON.parse(line);
           if (chunk.message?.content) {
             yield chunk.message.content;
           }
           if (chunk.done) return;
-        } catch {
-          // incomplete chunk - continue
+        } catch (error) {
+          this.logger.error(`Failed to parse Ollama chunk: ${line}`, error);
         }
       }
     }

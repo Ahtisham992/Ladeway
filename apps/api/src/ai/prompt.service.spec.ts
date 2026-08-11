@@ -62,9 +62,9 @@ describe('PromptService', () => {
       const prompt = promptService.assembleExtractionPrompt(logisticsConfig, session, mockMessages);
       
       expect(prompt[0].role).toBe('user');
-      expect(prompt[0].content).toContain('"origin": City or Zip Code');
+      expect(prompt[0].content).toContain('"origin": Origin — hint: City or Zip Code');
       expect(prompt[0].content).not.toContain('"destination"');
-      expect(prompt[0].content).toContain('CRITICAL: Your response must be ONLY a valid JSON object.');
+      expect(prompt[0].content).toContain('Return ONLY the JSON object. No explanation.');
     });
   });
 
