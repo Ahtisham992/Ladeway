@@ -25,6 +25,11 @@ export class HealthController {
     };
   }
 
+  @Get('chaos')
+  triggerChaos() {
+    throw new Error('CHAOS_DRILL: Intentional unhandled exception to test Sentry & Discord alerting.');
+  }
+
   @Get('ai')
   async checkAI() {
     const start = Date.now();

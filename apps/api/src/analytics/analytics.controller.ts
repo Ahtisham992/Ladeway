@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards, Logger } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -7,6 +7,8 @@ import { Roles } from '../auth/decorators/roles.decorator';
 @Controller('analytics')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AnalyticsController {
+  private readonly logger = new Logger(AnalyticsController.name);
+
   constructor(private readonly analyticsService: AnalyticsService) {}
 
   @Get('summary')
@@ -18,9 +20,8 @@ export class AnalyticsController {
     try {
       return await this.analyticsService.getSummary(from, to);
     } catch (error: any) {
-      console.error('getSummary error:', error);
-      const { HttpException } = require('@nestjs/common');
-      throw new HttpException(error.message, 500);
+      this.logger.error('getSummary error:', error);
+      throw error;
     }
   }
 

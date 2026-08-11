@@ -1582,3 +1582,66 @@ I will implement comprehensive test coverage for the services identified in the 
 
 ### Manual Verification
 - Review the Jest coverage report generated during Phase 11 (`npm run test -- --coverage`) to ensure critical paths (Auth, Isolation, Billing) hit the >90% coverage threshold.
+
+
+# Epic 1: Observability Stack (Phases 15-24)
+
+This plan covers the design and execution of Epic 1 from the Ladeway 2.0 Roadmap. The focus here is to move beyond "it works on my machine" to "I can see exactly why it failed in production" by implementing structured logging, distributed tracing, and centralized error tracking.
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Branch Management**
+> Following your instructions, I will create a new branch: `feature/epic-1-observability` before starting any code changes, and we will commit professionally to this branch.
+
+> [!WARNING]
+> **Third-Party Observability Services**
+> Phases 18-21 require integrating with external services (OpenTelemetry, Sentry/GlitchTip, and Uptime Alerting channels like Discord/Slack). 
+> - **Sentry**: Do you have a Sentry DSN you want me to configure, or should I just set up the SDK with a dummy/placeholder DSN so the codebase is ready?
+> - **OpenTelemetry Backend**: Should we spin up a local Jaeger instance via Docker for visualizing traces during development, or simply log traces to the console for now?
+> - **Alerting**: Shall we mock the alerting webhooks (e.g. Discord/Slack) or do you have a specific webhook URL to use?
+
+## Proposed Changes
+
+### Phase 15 & 16: Ideation & Schema Design
+#### [NEW] [docs/design/observability-priorities.md](file:///d:/logistics/docs/design/observability-priorities.md)
+- Identify top 5 failure modes (AI down, DB limits, latency, etc.).
+- Define the universal structured JSON log schema (requiring `tenantId`, `conversationId`, `durationMs`, etc.).
+
+### Phase 17: Structured Logging Rollout
+#### [MODIFY] [package.json](file:///d:/logistics/package.json)
+- Install `nestjs-pino`, `pino-http`, and `pino-pretty` for structured JSON logging.
+#### [MODIFY] [apps/api/src/app.module.ts](file:///d:/logistics/apps/api/src/app.module.ts)
+- Replace the default NestJS logger with the `LoggerModule` from `nestjs-pino`.
+- Configure the request correlation middleware to attach `reqId` to all logs automatically.
+#### [MODIFY] Source Files
+- Scrub remaining `console.error` calls and migrate all built-in `Logger` calls to Pino structured logs.
+
+### Phase 18: Distributed Tracing Setup
+#### [MODIFY] [package.json](file:///d:/logistics/package.json)
+- Install `@opentelemetry/sdk-node`, `@opentelemetry/auto-instrumentations-node`.
+#### [NEW] [apps/api/src/tracing.ts](file:///d:/logistics/apps/api/src/tracing.ts)
+- Initialize the OTel SDK to auto-instrument Express, HTTP, and Prisma requests.
+#### [MODIFY] [apps/api/src/conversation/conversation.service.ts](file:///d:/logistics/apps/api/src/conversation/conversation.service.ts)
+- Create custom spans for the AI pipeline (prompt assembly -> LLM inference -> extraction) to trace exactly where time is spent.
+
+### Phase 19-21: Error Tracking & Alerting
+#### [MODIFY] [package.json](file:///d:/logistics/package.json)
+- Install `@sentry/node` and `@sentry/profiling-node`.
+#### [NEW] [apps/api/src/common/filters/global-exception.filter.ts](file:///d:/logistics/apps/api/src/common/filters/global-exception.filter.ts)
+- Catch all unhandled exceptions, send them to Sentry, and return a sanitized 500 error to the client.
+#### [NEW] [apps/api/src/health/health.controller.ts](file:///d:/logistics/apps/api/src/health/health.controller.ts)
+- Add `/health` and `/health/ai` endpoints designed specifically for external uptime monitors.
+
+### Phase 22-24: Chaos Drills & Retro
+- Perform manual chaos drills (intentionally break OLLAMA_URL and simulate DB failures).
+- Create `docs/retros/epic-1.md` documenting the results of the drills and the new observability capabilities.
+
+## Verification Plan
+
+### Automated Tests
+- Run `npm run test` and `npm run test:integration` to ensure logging and tracing middlewares do not break any existing test boundaries.
+
+### Manual Verification
+- Trigger a mock error and observe the structured JSON log output (with `reqId` and `tenantId` attached).
+- Hit the `/health` endpoints to verify they respond correctly.

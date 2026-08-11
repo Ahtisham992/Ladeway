@@ -11,6 +11,9 @@ import { StartConversationResponse } from './types/conversation.types';
 import { ConversationStatus } from '../session/types/session.types';
 import { QualificationAction } from '../qualification/types/qualification.types';
 import { tenantContext } from '../tenant/tenant.context';
+import { trace } from '@opentelemetry/api';
+
+const tracer = trace.getTracer('ladeway-api.conversation');
 
 @Injectable()
 export class ConversationService {
@@ -142,15 +145,30 @@ export class ConversationService {
         await new Promise(r => setTimeout(r, 20));
       }
     } else {
-      const prompt = this.promptService.assembleConversationPrompt(config, session, messages);
+      const pipelineSpan = tracer.startSpan('ai_pipeline');
       try {
-        for await (const token of this.llmRouter.stream(prompt)) {
-          fullResponse += token;
-          yield token;
+        const promptSpan = tracer.startSpan('assemble_prompt');
+        const prompt = this.promptService.assembleConversationPrompt(config, session, messages);
+        promptSpan.end();
+        
+        let llmTokens = 0;
+        const llmSpan = tracer.startSpan('llm_inference_stream');
+        try {
+          for await (const token of this.llmRouter.stream(prompt)) {
+            fullResponse += token;
+            llmTokens++;
+            yield token;
+          }
+          llmSpan.setAttribute('tokens_generated', llmTokens);
+        } catch (error: any) {
+          this.logger.error(`AI Streaming Error: ${error.message}`, error.stack);
+          llmSpan.recordException(error);
+          throw new Error('AI service temporarily unavailable. Please try again.');
+        } finally {
+          llmSpan.end();
         }
-      } catch (error: any) {
-        this.logger.error(`AI Streaming Error: ${error.message}`, error.stack);
-        throw new Error('AI service temporarily unavailable. Please try again.');
+      } finally {
+        pipelineSpan.end();
       }
     }
 
@@ -172,7 +190,13 @@ export class ConversationService {
     if (nextAction === QualificationAction.TRIGGER_EXTRACTION || nextAction === QualificationAction.TRIGGER_TRANSFER) {
       this.logger.log(`Triggering extraction for session ${sessionToken} with action ${nextAction}`);
       
-      const extractionResult = await this.extractor.extract(config, currentSession, messages);
+      const extractSpan = tracer.startSpan('extraction_parser');
+      let extractionResult: Record<string, any> = {};
+      try {
+        extractionResult = await this.extractor.extract(config, currentSession, messages);
+      } finally {
+        extractSpan.end();
+      }
       
       const extractedValues: Record<string, string> = {};
       const newExtractedData = [];
