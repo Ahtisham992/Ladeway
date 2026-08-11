@@ -14,7 +14,10 @@
     "clean": "turbo run clean",
     "db:migrate": "npx prisma migrate dev --schema=prisma/schema.prisma",
     "db:seed": "npx ts-node prisma/seed.ts",
-    "db:studio": "npx prisma studio --schema=prisma/schema.prisma"
+    "db:studio": "npx prisma studio --schema=prisma/schema.prisma",
+    "test": "turbo run test",
+    "test:integration": "turbo run test:integration",
+    "test:e2e": "npx playwright test --config=apps/web/playwright.config.ts"
   },
   "devDependencies": {
     "turbo": "^2.5.0",
