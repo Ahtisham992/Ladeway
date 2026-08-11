@@ -761,3 +761,42 @@ I wrote comprehensive unit and integration tests to cover the gaps identified in
 
 > [!TIP]
 > You can now merge `feature/epic-0-hardening` into your `main` branch. Epic 0 is fully complete! We are now ready to tackle **Epic 1: The Core Rewrite & Strict Typing**. Let me know when you'd like to begin Phase 14!
+
+
+
+# Epic 0: Foundation Hardening Completed!
+
+I have successfully executed the build and test phases of Epic 0 on the new branch `feature/epic-0-hardening`.
+
+## What was changed
+
+### 1. Git Repository Setup
+- Created the professional feature branch: `feature/epic-0-hardening`.
+- Committed and pushed the `v1-technical-debt.md` and `test-strategy.md` documents.
+
+### 2. Test Infrastructure (Phases 3 & 4)
+- **Dependencies**: Installed `jest`, `supertest`, and `@playwright/test`.
+- **Scripts**: Updated `package.json` at the root and within `apps/api` to include `test:integration` and `test:e2e` scripts via Turborepo.
+- **Config**: Created `jest-integration.json` in the API app and `playwright.config.ts` in the Web app to properly separate our testing tiers.
+
+### 3. Test Backfill (Phases 5-10)
+I wrote comprehensive unit and integration tests to cover the gaps identified in the technical debt audit:
+- [NEW] [llm-router.service.spec.ts](file:///d:/logistics/apps/api/src/ai/llm-router.service.spec.ts): Mocks the LLM fetch calls and ensures the stream buffers and parses JSON chunks correctly, even if they split mid-stream.
+- [NEW] [auth.service.spec.ts](file:///d:/logistics/apps/api/src/auth/auth.service.spec.ts): Tests the JWT issuance and bcrypt validation paths.
+- [NEW] [tenant.isolation.integration.spec.ts](file:///d:/logistics/apps/api/src/tenant/tenant.isolation.integration.spec.ts): We wrote rigorous automated test suites for the core domain. We added Jest integration tests mapping to the internal database (`PrismaService` via `$system`), bypassing RLS. 
+- [NEW] [conversation.controller.integration.spec.ts](file:///d:/logistics/apps/api/src/conversation/conversation.controller.integration.spec.ts): Supertest-based integration test for hitting the conversational endpoints without spinning up the live API.
+
+## Epic 1: Observability Stack
+### Structured Logging & Tracing
+We moved from `console.log` to **Pino JSON logging** mapped with Request IDs. We integrated **OpenTelemetry** with custom span tracking for the AI pipeline (`assemble_prompt` -> `llm_inference_stream` -> `extraction_parser`), allowing tracing via Jaeger.
+
+### Error Tracking & Alerting
+We configured **Sentry** and a **Discord Webhook**. A global exception filter intercepts 500 errors, strips the stack trace from the user, and sends the crash data directly to Sentry and our Discord channel. We ran **Chaos Drills** (`/health/chaos`) to prove this pipeline works.
+
+## 4. Critical Bug Fixes
+- [MODIFY] [llm-router.service.ts](file:///d:/logistics/apps/api/src/ai/llm-router.service.ts): Fixed the severe chunk-swallowing bug during `streamOllama`. Raw TCP stream chunks that split mid-JSON payload are now safely accumulated in a string buffer instead of failing to parse and being permanently discarded.
+
+## Next Steps
+
+> [!TIP]
+> You can now merge `feature/epic-1-observability` into your `main` branch. Epic 1 is fully complete! We are now ready to tackle **Epic 2: Performance & Scale**. Let me know when you'd like to begin Phase 25!
