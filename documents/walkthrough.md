@@ -749,6 +749,14 @@ I wrote comprehensive unit and integration tests to cover the gaps identified in
 ### 4. Critical Bug Fixes
 - [MODIFY] [llm-router.service.ts](file:///d:/logistics/apps/api/src/ai/llm-router.service.ts): Fixed the severe chunk-swallowing bug during `streamOllama`. Raw TCP stream chunks that split mid-JSON payload are now safely accumulated in a string buffer instead of failing to parse and being permanently discarded.
 
+### 5. Test Suite Execution & Fixes
+- Ran the full test suite (`npm run test`) and uncovered and resolved several regressions from the v1 prototype.
+- [MODIFY] [prompt.service.ts](file:///d:/logistics/apps/api/src/ai/prompt.service.ts): Fixed a bug where the extraction prompt was still asking the LLM to extract fields that were already successfully captured in previous turns.
+- Fixed outdated string assertions in `prompt.service.spec.ts` to match the newly improved LLM system prompt.
+- Fixed missing `PrismaService` and `AnalyticsService` providers in the test modules for the analytics controllers and services.
+- Corrected the integration test assertions in `conversation.controller.integration.spec.ts` to properly anticipate and parse the Server-Sent Events (SSE) `text/event-stream` chunks rather than a standard JSON payload.
+- **Outcome:** All 33 tests across 10 test suites successfully pass!
+
 ## Next Steps
 
 > [!TIP]
