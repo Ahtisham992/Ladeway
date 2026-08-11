@@ -19,6 +19,7 @@ describe('LLMRouterService', () => {
             get: jest.fn().mockImplementation((key) => {
               if (key === 'OLLAMA_URL') return 'http://localhost:11434';
               if (key === 'GROQ_API_KEY') return 'test-key';
+              if (key === 'ACTIVE_LLM_PROVIDER') return 'ollama';
               return null;
             }),
           },
@@ -64,7 +65,7 @@ describe('LLMRouterService', () => {
         },
       });
 
-      const stream = service.stream([{ role: 'user', content: 'Hi' }], { provider: 'ollama' });
+      const stream = service.stream([{ role: 'user', content: 'Hi' }]);
       
       const results = [];
       for await (const chunk of stream) {
@@ -104,7 +105,7 @@ describe('LLMRouterService', () => {
       // Spy on the logger
       const loggerSpy = jest.spyOn(service['logger'], 'error').mockImplementation();
 
-      const stream = service.stream([{ role: 'user', content: 'Hi' }], { provider: 'ollama' });
+      const stream = service.stream([{ role: 'user', content: 'Hi' }]);
       
       const results = [];
       for await (const chunk of stream) {

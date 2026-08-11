@@ -3,14 +3,19 @@ import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
 import { ConversationController } from './conversation.controller';
 import { ConversationService } from './conversation.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantMiddleware } from '../tenant/tenant.middleware';
+import { SessionService } from '../session/session.service';
+import { PrismaService } from '../database/prisma.service';
 
 describe('ConversationController (Integration)', () => {
   let app: INestApplication;
   const mockConversationService = {
     startConversation: jest.fn().mockResolvedValue({ id: 'conv_123', message: 'Hi there!' }),
-    processMessage: jest.fn().mockResolvedValue({ id: 'conv_123', reply: 'How can I help?' }),
+    sendMessage: jest.fn().mockImplementation(async function* () {
+      yield 'How can I help?';
+      yield JSON.stringify({ _done: true, status: 'IN_PROGRESS', turnCount: 1 });
+    }),
   };
 
   beforeAll(async () => {
@@ -21,6 +26,14 @@ describe('ConversationController (Integration)', () => {
           provide: ConversationService,
           useValue: mockConversationService,
         },
+        {
+          provide: SessionService,
+          useValue: {},
+        },
+        {
+          provide: PrismaService,
+          useValue: {},
+        },
       ],
     })
       .overrideGuard(JwtAuthGuard)
@@ -30,7 +43,7 @@ describe('ConversationController (Integration)', () => {
     app = moduleFixture.createNestApplication();
     
     // We mock the middleware since we aren't testing DB connections here
-    app.use((req, res, next) => {
+    app.use((req: any, res: any, next: any) => {
       req.tenantId = 'test-tenant';
       next();
     });
@@ -39,13 +52,15 @@ describe('ConversationController (Integration)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
   });
 
   it('/conversations/start (POST)', () => {
     return request(app.getHttpServer())
       .post('/conversations/start')
-      .send({ industryId: 'ind_1' })
+      .send({ configId: 'ind_1' })
       .expect(201)
       .expect({
         id: 'conv_123',
@@ -53,14 +68,14 @@ describe('ConversationController (Integration)', () => {
       });
   });
 
-  it('/conversations/message (POST)', () => {
-    return request(app.getHttpServer())
-      .post('/conversations/message')
-      .send({ sessionId: 'conv_123', message: 'I need help' })
-      .expect(201)
-      .expect({
-        id: 'conv_123',
-        reply: 'How can I help?',
-      });
+  it('/conversations/message (POST)', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/conversations/conv_123/message')
+      .send({ sessionToken: 'conv_123', message: 'I need help' })
+      .expect(201);
+      
+    expect(response.text).toContain('event: token');
+    expect(response.text).toContain('data: {"content":"How can I help?"}');
+    expect(response.text).toContain('event: done');
   });
 });
