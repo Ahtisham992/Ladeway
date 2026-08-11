@@ -30,6 +30,11 @@ import { QualificationModule } from './qualification/qualification.module';
 import { ConversationModule } from './conversation/conversation.module';
 import { LeadModule } from './lead/lead.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { LoggerModule } from 'nestjs-pino';
+import { randomUUID } from 'node:crypto';
+import { AlertingModule } from './common/alerting/alerting.module';
+import { APP_FILTER } from '@nestjs/core';
+import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 
 @Module({
   imports: [
@@ -53,8 +58,21 @@ import { AnalyticsModule } from './analytics/analytics.module';
     ConversationModule,
     LeadModule,
     AnalyticsModule,
+    LoggerModule.forRoot({
+      pinoHttp: {
+        transport: process.env.NODE_ENV !== 'production' ? { target: 'pino-pretty' } : undefined,
+        genReqId: (req) => req.headers['x-request-id'] || randomUUID(),
+        autoLogging: true,
+      },
+    }),
+    AlertingModule,
   ],
   controllers: [HealthController],
-  providers: [],
+  providers: [
+    {
+      provide: APP_FILTER,
+      useClass: GlobalExceptionFilter,
+    },
+  ],
 })
 export class AppModule {}

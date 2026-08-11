@@ -9,13 +9,29 @@
  * Deployed on Railway as a persistent Node.js process (not serverless)
  * to support SSE streaming for AI responses.
  */
+import { otelSDK } from './tracing';
+otelSDK.start();
+
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
+import { Logger as PinoLogger } from 'nestjs-pino';
+import * as Sentry from '@sentry/nestjs';
+import { nodeProfilingIntegration } from '@sentry/profiling-node';
 
 async function bootstrap() {
+  if (process.env.SENTRY_DSN) {
+    Sentry.init({
+      dsn: process.env.SENTRY_DSN,
+      integrations: [nodeProfilingIntegration()],
+      tracesSampleRate: 1.0,
+      profilesSampleRate: 1.0,
+    });
+  }
+
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  app.useLogger(app.get(PinoLogger));
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
 
   // CORS — allow frontend origin
   app.enableCors({

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, Inject } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, Inject, Logger } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { tenantContext } from '../tenant/tenant.context';
 import { CreateIndustryConfigDto, UpdateIndustryConfigDto } from './schemas/config.schema';
@@ -7,6 +7,8 @@ import { Cache } from 'cache-manager';
 
 @Injectable()
 export class IndustryConfigService {
+  private readonly logger = new Logger(IndustryConfigService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
@@ -107,8 +109,8 @@ export class IndustryConfigService {
       await this.cacheManager.del(`config:${id}`);
 
       return { id, versioned: false };
-    } catch (error) {
-      console.error('Update failed:', error);
+    } catch (error: any) {
+      this.logger.error('Update failed:', error);
       throw error;
     }
   }

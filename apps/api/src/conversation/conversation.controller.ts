@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Res, Param, Get, Query, NotFoundException } from '@nestjs/common';
+import { Controller, Post, Body, Res, Param, Get, Query, NotFoundException, Logger } from '@nestjs/common';
 import { Response } from 'express';
 import { ConversationService } from './conversation.service';
 import { SessionService } from '../session/session.service';
@@ -8,6 +8,8 @@ import { ZodValidationPipe } from '../industry-config/zod.pipe';
 
 @Controller('conversations')
 export class ConversationController {
+  private readonly logger = new Logger(ConversationController.name);
+
   constructor(
     private readonly conversationService: ConversationService,
     private readonly sessionService: SessionService,
@@ -20,8 +22,8 @@ export class ConversationController {
   ) {
     try {
       return await this.conversationService.startConversation(dto.configId);
-    } catch (error) {
-      console.error('START_CONVERSATION_ERROR:', error);
+    } catch (error: any) {
+      this.logger.error('START_CONVERSATION_ERROR:', error);
       throw error;
     }
   }
