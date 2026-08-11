@@ -786,7 +786,7 @@ I wrote comprehensive unit and integration tests to cover the gaps identified in
 - [NEW] [tenant.isolation.integration.spec.ts](file:///d:/logistics/apps/api/src/tenant/tenant.isolation.integration.spec.ts): We wrote rigorous automated test suites for the core domain. We added Jest integration tests mapping to the internal database (`PrismaService` via `$system`), bypassing RLS. 
 - [NEW] [conversation.controller.integration.spec.ts](file:///d:/logistics/apps/api/src/conversation/conversation.controller.integration.spec.ts): Supertest-based integration test for hitting the conversational endpoints without spinning up the live API.
 
-## Epic 1: Observability Stack
+# Epic 1: Observability Stack
 ### Structured Logging & Tracing
 We moved from `console.log` to **Pino JSON logging** mapped with Request IDs. We integrated **OpenTelemetry** with custom span tracking for the AI pipeline (`assemble_prompt` -> `llm_inference_stream` -> `extraction_parser`), allowing tracing via Jaeger.
 
@@ -800,3 +800,103 @@ We configured **Sentry** and a **Discord Webhook**. A global exception filter in
 
 > [!TIP]
 > You can now merge `feature/epic-1-observability` into your `main` branch. Epic 1 is fully complete! We are now ready to tackle **Epic 2: Performance & Scale**. Let me know when you'd like to begin Phase 25!
+
+# Epic 2: Real-Time Voice AI Pipeline
+
+## Overview
+Epic 2 introduces a full-duplex, real-time voice AI pipeline to Ladeway, enabling end-users to have natural phone-call-like conversations with the AI qualification agent. The system captures microphone audio, transcribes it via Deepgram, processes it through the existing LLM conversation engine, and synthesizes spoken responses via ElevenLabs TTS — all over a persistent WebSocket connection.
+
+## Architecture
+
+```
+Browser Mic → AudioContext (PCM 16kHz) → WebSocket → NestJS VoiceGateway
+    → Deepgram Nova-2 (STT) → Utterance Buffer (debounce 1.5s)
+    → ConversationService.sendMessage() → LLM (Groq)
+    → Sentence Splitter → ElevenLabs TTS (MP3) → WebSocket → Browser Audio Queue
+```
+
+## What was built
+
+### 1. Voice Module (Backend)
+
+#### [NEW] [voice.module.ts](file:///d:/logistics/apps/api/src/voice/voice.module.ts)
+NestJS module registering the `VoiceGateway` and `VoiceOrchestratorService` with required dependencies (`ConfigModule`, `ConversationModule`).
+
+#### [NEW] [voice.gateway.ts](file:///d:/logistics/apps/api/src/voice/voice.gateway.ts)
+WebSocket gateway mounted at `/voice/stream` using the `WsAdapter`. Handles raw binary audio messages directly via `client.on('message')` instead of `@SubscribeMessage()` decorators, which require JSON event framing incompatible with raw PCM audio streams.
+
+Key design decisions:
+- **Direct `client.on('message')` listener**: NestJS `@SubscribeMessage()` only works with JSON-framed messages. Raw binary audio from the browser was silently dropped. The gateway now intercepts all messages and routes binary frames to the orchestrator.
+- **`configId` from query string**: The WebSocket URL includes `?configId=...` to identify which industry config to use.
+
+#### [NEW] [voice-orchestrator.service.ts](file:///d:/logistics/apps/api/src/voice/voice-orchestrator.service.ts)
+The core voice pipeline service managing:
+
+- **Deepgram Live STT**: Connects to Deepgram's Nova-2 model with `linear16` encoding at 16kHz. Configured with `utterance_end_ms: 1200` and `vad_events: true` for intelligent end-of-speech detection.
+- **Utterance Buffering**: Instead of processing each Deepgram final transcript immediately (which caused the AI to interrupt the user mid-sentence), transcripts are accumulated in a buffer. The buffer only flushes after 1.5 seconds of silence OR when Deepgram fires an `UtteranceEnd` event — whichever comes first. This lets users complete multi-segment thoughts naturally.
+- **ElevenLabs TTS**: Synthesizes AI responses using the `eleven_multilingual_v2` model in `mp3_44100_128` format. Audio is buffered server-side and sent as base64-encoded JSON over the WebSocket.
+- **Sentence-level streaming**: LLM responses are split on sentence boundaries (`.` `!` `?`) and each sentence is synthesized independently. The first sentence starts playing while the rest are still being generated, dramatically reducing perceived latency.
+- **Metadata filtering**: The `_done` JSON metadata chunk from `ConversationService.sendMessage()` is filtered out before TTS synthesis, preventing the AI from speaking raw JSON.
+
+### 2. Voice Widget (Frontend)
+
+#### [NEW] [VoiceWidget.tsx](file:///d:/logistics/apps/web/components/voice/VoiceWidget.tsx)
+React component providing the voice call UI with:
+
+- **AudioContext + ScriptProcessor**: Captures raw PCM audio from the microphone, downsamples from the browser's native sample rate (44.1kHz/48kHz) to 16kHz Int16 PCM, and streams it over the WebSocket as binary ArrayBuffer. This is critical because `MediaRecorder` outputs compressed WebM/Opus which Deepgram's `linear16` mode cannot decode.
+- **Persistent Audio element**: Created imperatively via `new Audio()` in a `useEffect` (not JSX) to avoid React re-mounting issues that break the `ended` event listener when `isCalling` state changes.
+- **Audio queue**: TTS audio chunks are queued and played sequentially. Each base64 chunk is decoded to a Blob, converted to an Object URL, and played through the persistent Audio element.
+- **Live transcript display**: Shows a scrolling chat-style UI with status messages, user transcripts (blue bubbles), and AI responses (white bubbles).
+
+#### [MODIFY] [voice/[configId]/page.tsx](file:///d:/logistics/apps/web/app/voice/[configId]/page.tsx)
+Voice demo page that renders the `VoiceWidget` with the config ID from the URL.
+
+### 3. Dependencies Added
+
+- `@deepgram/sdk` — Real-time speech-to-text
+- `elevenlabs` — Text-to-speech synthesis
+- `@nestjs/platform-ws` + `ws` — WebSocket adapter for NestJS
+
+### 4. Configuration
+
+Required environment variables in `apps/api/.env`:
+- `DEEPGRAM_API_KEY` — Deepgram API key for STT
+- `ELEVENLABS_API_KEY` — ElevenLabs API key (must start with `sk_`)
+
+## Key Technical Challenges Resolved
+
+| Challenge | Root Cause | Solution |
+|---|---|---|
+| Audio not reaching Deepgram | `@SubscribeMessage('audio_in')` requires JSON framing; raw binary was silently dropped | Direct `client.on('message')` listener in gateway |
+| Browser sends WebM, Deepgram expects PCM | `MediaRecorder` outputs compressed WebM/Opus codec | `AudioContext` + `ScriptProcessor` captures raw Float32, converts to Int16 PCM at 16kHz |
+| TTS audio not playing in browser | Raw PCM has no container headers; `<audio>` can't play headerless data | Request MP3 format from ElevenLabs, send as base64 JSON |
+| Audio element re-mounting | React conditional rendering created two `<audio>` elements; event listeners attached to wrong one | Create `Audio` imperatively in `useEffect`, persist across renders |
+| AI interrupting user mid-sentence | Each Deepgram `is_final` transcript triggered immediate LLM response | Utterance buffer with 1.5s debounce + Deepgram `utterance_end_ms` |
+| LLM metadata in spoken response | `sendMessage()` yields `{"_done":true,...}` metadata chunk | Filter chunks containing `"_done":true` before concatenation |
+| ElevenLabs API key rejected | User provided the API Key ID instead of the secret key | Diagnosed via API error message; key must start with `sk_` |
+
+## Files Changed
+
+### New Files
+- [voice.module.ts](file:///d:/logistics/apps/api/src/voice/voice.module.ts)
+- [voice.gateway.ts](file:///d:/logistics/apps/api/src/voice/voice.gateway.ts)
+- [voice-orchestrator.service.ts](file:///d:/logistics/apps/api/src/voice/voice-orchestrator.service.ts)
+- [VoiceWidget.tsx](file:///d:/logistics/apps/web/components/voice/VoiceWidget.tsx)
+- [voice/[configId]/page.tsx](file:///d:/logistics/apps/web/app/voice/[configId]/page.tsx)
+
+### Modified Files
+- [app.module.ts](file:///d:/logistics/apps/api/src/app.module.ts) — Registered `VoiceModule`
+- [main.ts](file:///d:/logistics/apps/api/src/main.ts) — Added `WsAdapter`
+- [conversation.module.ts](file:///d:/logistics/apps/api/src/conversation/conversation.module.ts) — Exported `ConversationService`
+- [package.json](file:///d:/logistics/apps/api/package.json) — Added `@deepgram/sdk`, `elevenlabs`, `@nestjs/platform-ws`, `ws`
+- [HelpWidget.tsx](file:///d:/logistics/apps/web/components/ui/HelpWidget.tsx) — Added `voice` context type
+
+## Verification
+- ✅ Backend compiles cleanly (`npx tsc --noEmit`)
+- ✅ Deepgram STT successfully transcribes user speech in real-time
+- ✅ ElevenLabs TTS generates MP3 audio and sends to client
+- ✅ AI greeting text and audio delivered on call start
+- ✅ Full conversation loop: User speaks → STT → LLM → TTS → Audio playback
+- ✅ Utterance buffering prevents AI from interrupting user
+- ✅ Sentence-level TTS streaming reduces perceived latency
+

@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Bot, MessageSquare, Building2, Zap, Target, Layers, CheckCircle } from 'lucide-react';
+import { Bot, MessageSquare, Building2, Zap, Target, Layers, CheckCircle, PhoneCall } from 'lucide-react';
 import { Logo } from '@/components/ui/Logo';
 
 interface TenantInfo {
@@ -180,12 +180,20 @@ export default async function LandingPage() {
                     <p className="text-sm text-secondary italic mb-6 line-clamp-3 relative pl-4 border-l-2 border-primary/20">
                       "{config.greeting}"
                     </p>
-                    <Link href={`/chat/${config.id}`} className="w-full mt-auto">
-                      <Button variant="outline" className="w-full justify-between group-hover:bg-primary group-hover:text-white group-hover:border-primary transition-colors border-border">
-                        Start Conversation
-                        <MessageSquare className="w-4 h-4 ml-2 opacity-70" />
-                      </Button>
-                    </Link>
+                    <div className="flex flex-col gap-2 mt-auto w-full">
+                      <Link href={`/chat/${config.id}`} className="w-full">
+                        <Button variant="outline" className="w-full justify-between group-hover:bg-primary group-hover:text-white group-hover:border-primary transition-colors border-border">
+                          Start Conversation
+                          <MessageSquare className="w-4 h-4 ml-2 opacity-70" />
+                        </Button>
+                      </Link>
+                      <Link href={`/voice/${config.id}`} className="w-full">
+                        <Button variant="outline" className="w-full justify-between group-hover:bg-primary group-hover:text-white group-hover:border-primary transition-colors border-border bg-primary/5">
+                          Call Voice Assistant
+                          <PhoneCall className="w-4 h-4 ml-2 opacity-70" />
+                        </Button>
+                      </Link>
+                    </div>
                   </CardContent>
                 </Card>
               ))}

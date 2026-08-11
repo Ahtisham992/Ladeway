@@ -35,6 +35,7 @@ import { randomUUID } from 'node:crypto';
 import { AlertingModule } from './common/alerting/alerting.module';
 import { APP_FILTER } from '@nestjs/core';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
+import { VoiceModule } from './voice/voice.module';
 
 @Module({
   imports: [
@@ -66,6 +67,7 @@ import { GlobalExceptionFilter } from './common/filters/global-exception.filter'
       },
     }),
     AlertingModule,
+    VoiceModule,
   ],
   controllers: [HealthController],
   providers: [

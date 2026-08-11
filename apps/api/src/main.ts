@@ -18,6 +18,7 @@ import { AppModule } from './app.module';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import * as Sentry from '@sentry/nestjs';
 import { nodeProfilingIntegration } from '@sentry/profiling-node';
+import { WsAdapter } from '@nestjs/platform-ws';
 
 async function bootstrap() {
   if (process.env.SENTRY_DSN) {
@@ -31,6 +32,7 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   app.useLogger(app.get(PinoLogger));
+  app.useWebSocketAdapter(new WsAdapter(app));
   const logger = new Logger('Bootstrap');
 
   // CORS — allow frontend origin

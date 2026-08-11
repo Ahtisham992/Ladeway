@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Info } from 'lucide-react';
 import { Modal } from './Modal';
 
-type HelpContext = 'admin' | 'chat';
+type HelpContext = 'admin' | 'chat' | 'voice';
 
 interface HelpWidgetProps {
   context: HelpContext;
@@ -67,6 +67,27 @@ export function HelpWidget({ context }: HelpWidgetProps) {
               <div className="mt-6 p-4 bg-primary/5 rounded-lg border border-primary/10">
                 <p className="text-primary font-medium mb-1">Testing Tip:</p>
                 <p className="text-xs">Try mentioning specific budgets, timelines, or constraints to see how the AI handles the conversation and scores you in the Leads pipeline!</p>
+              </div>
+            </>
+          )}
+          {context === 'voice' && (
+            <>
+              <p>Welcome to the <strong>Voice AI Agent Demo</strong>!</p>
+              <p>This page simulates exactly how your customers will interact with your AI agent over a voice call.</p>
+              <ul className="space-y-3 list-disc pl-5 marker:text-primary/50">
+                <li>
+                  <strong className="text-primary">Voice Synthesis (TTS):</strong> The AI responds using ultra-low latency text-to-speech, generating natural vocal intonation.
+                </li>
+                <li>
+                  <strong className="text-primary">Speech Recognition (STT):</strong> Your microphone audio is streamed and transcribed in real-time.
+                </li>
+                <li>
+                  <strong className="text-primary">Seamless Integration:</strong> Voice calls share the same underlying LLM logic, persona, and lead qualification rules as text chat.
+                </li>
+              </ul>
+              <div className="mt-6 p-4 bg-primary/5 rounded-lg border border-primary/10">
+                <p className="text-primary font-medium mb-1">Testing Tip:</p>
+                <p className="text-xs">Try pausing mid-sentence to see how the AI handles silence and barge-in (interruption) in real-time!</p>
               </div>
             </>
           )}
