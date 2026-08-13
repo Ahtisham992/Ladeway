@@ -39,7 +39,9 @@ ${capturedSection}
 ${missingSection}
 
 If the user has just started the conversation, greet them naturally using or adapting this greeting: "${config.greeting}"
-If all required fields are collected, you MUST summarize all the details (e.g. name, cargo, timeline, origin, etc.) in a friendly way for final confirmation, inform them that you have everything you need, and let them know someone will be in touch shortly to provide a quote.`;
+If all required fields are collected, you MUST summarize all the details (e.g. name, cargo, timeline, origin, etc.) in a friendly way for final confirmation, inform them that you have everything you need, and let them know someone will be in touch shortly to provide a quote.
+
+If all required fields are collected AND you have already provided the final confirmation, but the user continues to speak (e.g., saying hello or adding details), politely acknowledge them, update their details if they asked to, and remind them that their lead is recorded and someone will reach out soon. Do not simply output nothing.`;
 
     const systemMessage: LLMMessage = {
       role: 'system',

@@ -11,8 +11,6 @@ export class VoiceOrchestratorService {
   private deepgramApiKey: string;
   private deepgramClient: any;
 
-  private ttsClient: MsEdgeTTS;
-
   // Active call state
   private activeCalls = new Map<string, {
     stt: LiveClient;
@@ -21,6 +19,7 @@ export class VoiceOrchestratorService {
     // Utterance buffering — collect partial transcripts until user stops speaking
     utteranceBuffer: string;
     utteranceTimer: ReturnType<typeof setTimeout> | null;
+    turnAbortController: AbortController | null;
   }>();
 
   constructor(
@@ -28,14 +27,8 @@ export class VoiceOrchestratorService {
     private conversationService: ConversationService
   ) {
     this.deepgramApiKey = this.configService.get<string>('DEEPGRAM_API_KEY') || '';
-
     this.logger.log(`Deepgram key present: ${!!this.deepgramApiKey}`);
-
     this.deepgramClient = createClient(this.deepgramApiKey);
-    this.ttsClient = new MsEdgeTTS();
-    this.ttsClient.setMetadata('en-US-AriaNeural', OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3).catch(e => {
-      this.logger.error('Failed to initialize Edge TTS metadata: ' + e.message);
-    });
   }
 
   async handleNewCall(callId: string, clientWs: WebSocket, configId: string) {
@@ -117,6 +110,7 @@ export class VoiceOrchestratorService {
       sessionToken,
       utteranceBuffer: '',
       utteranceTimer: null,
+      turnAbortController: null,
     });
     
     // Send greeting immediately via TTS
@@ -170,11 +164,12 @@ export class VoiceOrchestratorService {
    */
   private async synthesizeAndSend(clientWs: WebSocket, text: string, label: string) {
     try {
-      // Ensure metadata is always set before synthesizing (passing empty object to fix msedge-tts bug)
-      await this.ttsClient.setMetadata('en-US-AriaNeural', OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3, { voiceLocale: 'en-US' });
+      // Create a fresh TTS client per synthesis to avoid concurrent WebSocket collisions 
+      const ttsClient = new MsEdgeTTS();
+      await ttsClient.setMetadata('en-US-AriaNeural', OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3, { voiceLocale: 'en-US' });
       this.logger.log(`[TTS ${label}] Synthesizing: "${text.substring(0, 60)}..."`);
       
-      const { audioStream } = this.ttsClient.toStream(text);
+      const { audioStream } = ttsClient.toStream(text);
 
       const chunks: Buffer[] = [];
       for await (const chunk of audioStream as any) {
@@ -203,6 +198,14 @@ export class VoiceOrchestratorService {
     this.logger.log(`Will route to AI: ${transcript}`);
     
     try {
+      // Abort any currently generating AI turn
+      if (call.turnAbortController) {
+        call.turnAbortController.abort();
+      }
+      
+      const abortController = new AbortController();
+      call.turnAbortController = abortController;
+
       // Stream LLM response
       let fullText = '';
       const responseStream = this.conversationService.sendMessage(
@@ -211,6 +214,11 @@ export class VoiceOrchestratorService {
       );
 
       for await (const chunk of responseStream) {
+        if (abortController.signal.aborted) {
+          this.logger.log(`[Barge-In] Aborted AI response generation for call ${callId}`);
+          return;
+        }
+
         // Skip metadata chunks
         if (chunk.includes('"_done":true') || chunk.includes('"_done": true')) {
           this.logger.log(`[Metadata]: ${chunk.substring(0, 80)}`);
