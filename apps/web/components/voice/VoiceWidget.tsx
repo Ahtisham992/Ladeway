@@ -12,6 +12,8 @@ export function VoiceWidget({ configId }: { configId: string }) {
   const [isCalling, setIsCalling] = React.useState(false)
   const [ws, setWs] = React.useState<WebSocket | null>(null)
   const [messages, setMessages] = React.useState<ChatMessage[]>([])
+  const [textInput, setTextInput] = React.useState('')
+  const inputRef = React.useRef<HTMLInputElement>(null)
   const chatEndRef = React.useRef<HTMLDivElement>(null)
   const audioQueueRef = React.useRef<string[]>([])
   const isPlayingRef = React.useRef(false)
@@ -138,9 +140,22 @@ export function VoiceWidget({ configId }: { configId: string }) {
               addMessage({ role: 'user', text: data.text })
             } else if (data.type === 'ai_response') {
               addMessage({ role: 'ai', text: data.text })
+              // Auto-focus input if AI is asking for specific details
+              const lowerText = data.text.toLowerCase()
+              if (lowerText.includes('email') || lowerText.includes('phone') || lowerText.includes('name')) {
+                setTimeout(() => inputRef.current?.focus(), 100)
+              }
             } else if (data.type === 'audio') {
               audioQueueRef.current.push(data.audioBase64)
               playNext()
+            } else if (data.type === 'interrupt') {
+              // User barge-in detected
+              audioQueueRef.current = []
+              if (audioElRef.current) {
+                audioElRef.current.pause()
+                audioElRef.current.src = ''
+              }
+              isPlayingRef.current = false
             } else if (data.type === 'status') {
               addMessage({ role: 'status', text: data.text })
             }
@@ -164,6 +179,19 @@ export function VoiceWidget({ configId }: { configId: string }) {
       console.error("Error starting voice call:", err)
       alert("Microphone access is required for voice calls.")
     }
+  }
+
+  const handleTextSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const text = textInput.trim()
+    if (!text || !ws || ws.readyState !== WebSocket.OPEN) return
+    
+    // Add user message to UI
+    addMessage({ role: 'user', text })
+    
+    // Send as custom text event to backend
+    ws.send(JSON.stringify({ type: 'text_input', text }))
+    setTextInput('')
   }
 
   const doCleanup = () => {
@@ -195,19 +223,40 @@ export function VoiceWidget({ configId }: { configId: string }) {
       </h3>
       
       {isCalling && (
-        <div className="w-full max-w-md bg-secondary-50 rounded-lg p-4 mb-6 text-left border border-secondary-100 shadow-inner h-52 overflow-y-auto flex flex-col gap-2">
-          {messages.map((msg, i) => (
-            <div key={i} className={
-              msg.role === 'ai' ? 'bg-white p-3 rounded-lg border border-primary/20 self-start max-w-[90%] shadow-sm' :
-              msg.role === 'user' ? 'bg-primary p-3 rounded-lg text-white self-end max-w-[90%] shadow-sm' :
-              'text-center text-xs text-secondary-400 italic py-1'
-            }>
-              {msg.role === 'ai' && <p className="text-xs font-bold text-primary mb-1">🔊 AI Assistant</p>}
-              {msg.role === 'user' && <p className="text-xs font-bold text-primary-200 mb-1">You</p>}
-              <p className={`text-sm ${msg.role === 'status' ? '' : msg.role === 'user' ? '' : 'text-secondary-800'}`}>{msg.text}</p>
-            </div>
-          ))}
-          <div ref={chatEndRef} />
+        <div className="w-full max-w-md bg-secondary-50 rounded-lg p-4 mb-6 border border-secondary-100 shadow-inner flex flex-col gap-2">
+          <div className="h-52 overflow-y-auto flex flex-col gap-2 mb-2 pr-2">
+            {messages.map((msg, i) => (
+              <div key={i} className={
+                msg.role === 'ai' ? 'bg-white p-3 rounded-lg border border-primary/20 self-start max-w-[90%] shadow-sm' :
+                msg.role === 'user' ? 'bg-primary p-3 rounded-lg text-white self-end max-w-[90%] shadow-sm' :
+                'text-center text-xs text-secondary-400 italic py-1'
+              }>
+                {msg.role === 'ai' && <p className="text-xs font-bold text-primary mb-1">🔊 AI Assistant</p>}
+                {msg.role === 'user' && <p className="text-xs font-bold text-primary-200 mb-1">You</p>}
+                <p className={`text-sm ${msg.role === 'status' ? '' : msg.role === 'user' ? '' : 'text-secondary-800'}`}>{msg.text}</p>
+              </div>
+            ))}
+            <div ref={chatEndRef} />
+          </div>
+          
+          <form onSubmit={handleTextSubmit} className="flex w-full gap-2 mt-2 border-t pt-3">
+            <input
+              ref={inputRef}
+              type="text"
+              value={textInput}
+              onChange={e => setTextInput(e.target.value)}
+              placeholder="Or type here (e.g. email)..."
+              className="flex-1 px-3 py-2 text-sm rounded-md border border-secondary-300 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              disabled={!isCalling}
+            />
+            <button
+              type="submit"
+              disabled={!textInput.trim() || !isCalling}
+              className="px-4 py-2 bg-primary text-white text-sm font-medium rounded-md hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Send
+            </button>
+          </form>
         </div>
       )}
 

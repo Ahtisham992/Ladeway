@@ -148,7 +148,7 @@ Done: `docs/retros/epic-1.md` written.
 
 ---
 
-# EPIC 2 — VOICE CHANNEL (TWILIO)
+# EPIC 2 — VOICE CHANNEL (WEB AUDIO)
 *Phases 25–42 · The largest, highest-learning-value addition*
 
 **Phase 25 [IDEATE] — Voice Problem Definition**
@@ -158,7 +158,7 @@ Done: `docs/design/voice-problem-statement.md`.
 
 **Phase 26 [DESIGN] — Telephony Architecture**
 Goal: Full pipeline design before any code.
-Tasks: Diagram Twilio → STT → NestJS orchestration → LLM → TTS → Twilio; decide schema reuse (channel-agnostic `Conversation`/`Message`).
+Tasks: Diagram Web Audio → STT → NestJS orchestration → LLM → TTS → Web Audio; decide schema reuse (channel-agnostic `Conversation`/`Message`).
 Done: Architecture diagram + written doc, reviewed against v1's existing schema.
 
 **Phase 27 [DESIGN] — Latency & Fallback Design**
@@ -166,14 +166,15 @@ Goal: Design for the failure cases before they happen live on a phone call.
 Tasks: Design hold-message fallback, voicemail fallback, timeout handling.
 Done: `docs/design/voice-fallback-design.md`.
 
-**Phase 28 [BUILD] — Twilio Account & Number Setup**
-Goal: A real phone number exists and can be called.
-Tasks: Create Twilio account, buy a test number, configure inbound webhook returning static TwiML.
-Done: Calling the number produces an audible static message.
+**Phase 28 [BUILD] — Voice Gateway Setup**
 
-**Phase 29 [BUILD] — Media Streams WebSocket**
-Goal: Raw audio flows bidirectionally between Twilio and your backend.
-Tasks: Configure Twilio Media Streams; implement the WebSocket endpoint in NestJS.
+Goal: A real connection exists between browser and backend.
+Tasks: Create WebAudio widget, capture browser microphone, connect via WebSocket.
+
+**Phase 29 [BUILD] — Backend Streaming Architecture**
+
+Goal: Raw audio flows bidirectionally between Browser and your backend.
+Tasks: Configure Media Streams; implement the WebSocket endpoint in NestJS.
 Done: Audio bytes are visibly received in logs when calling the number.
 
 **Phase 30 [BUILD] — Streaming STT Integration**
@@ -193,7 +194,7 @@ Done: A voice call produces `Message` rows identical in shape to chat messages.
 
 **Phase 33 [BUILD] — TTS Integration**
 Goal: AI responses become audible speech.
-Tasks: Integrate ElevenLabs (or Twilio `<Say>` as a cheaper baseline); stream synthesized audio back through Media Streams.
+Tasks: Integrate Microsoft Edge TTS (free tier); stream synthesized audio back through WebSockets.
 Done: A full turn — speak, AI responds, you hear it — works end to end.
 
 **Phase 34 [BUILD] — Barge-In / Interruption Handling**
@@ -208,7 +209,7 @@ Done: Going silent for 10+ seconds triggers the correct re-prompt.
 
 **Phase 36 [BUILD] — Call Recording & Persistence**
 Goal: Every voice conversation is fully auditable like chat.
-Tasks: Enable Twilio call recording; store recording URL and full transcript on the `Conversation`.
+Tasks: Enable browser call recording; store recording URL and full transcript on the `Conversation`.
 Done: A completed test call has a playable recording and complete transcript in the DB.
 
 **Phase 37 [BUILD] — Voice-to-Human Transfer**
@@ -233,7 +234,7 @@ Done: Documented behavior for each; any breaking bug fixed.
 
 **Phase 41 [BUILD] — Voice Config in Admin Console**
 Goal: A tenant can assign a phone number to their IndustryConfig without touching code.
-Tasks: Extend the config editor UI from v1 with a phone number field and Twilio provisioning trigger.
+Tasks: Extend the config editor UI from v1 with a voice model configuration field.
 Done: An admin can configure and receive a working phone number through the UI.
 
 **Phase 42 [OPERATE] — Voice Epic Retro**
@@ -624,7 +625,7 @@ Done: Published write-up you'd be proud to link in any application.
 |---|---|---|
 | 0 — Foundation | 1–14 | Real test suite, production hosting |
 | 1 — Observability | 15–24 | Logs, traces, errors, alerts |
-| 2 — Voice | 25–42 | Real Twilio phone qualification |
+| 2 — Voice | 25–42 | Real Web Voice qualification |
 | 3 — Billing | 43–54 | Live Stripe subscriptions |
 | 4 — Knowledge Base | 55–65 | RAG-grounded AI answers |
 | 5 — Campaigns | 66–74 | Outbound AI calling |

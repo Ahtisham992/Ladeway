@@ -1648,9 +1648,9 @@ This plan covers the design and execution of Epic 1 from the Ladeway 2.0 Roadmap
 
 
 
-# Epic 2: Voice Channel (Twilio) - Phases 25-42
+# Epic 2: Voice Channel (Web Audio) - Phases 25-42
 
-*Note: I previously mentioned this epic would be "Performance & Scale", but according to our official roadmap, Epic 2 is actually the massive **Voice Channel (Twilio)** integration! This plan maps out how we will implement it.*
+*Note: I previously mentioned this epic would be "Performance & Scale", but according to our official roadmap, Epic 2 is actually the massive **Voice Channel (Web Audio)** integration! This plan maps out how we will implement it.*
 
 The goal of this Epic is to add a full telephony pipeline to Ladeway, allowing tenants to configure a phone number that AI can answer, hold a spoken conversation, qualify the lead, and extract fields—all reusing the exact same LLM conversation engine we built for the web chat.
 
@@ -1666,9 +1666,9 @@ The goal of this Epic is to add a full telephony pipeline to Ladeway, allowing t
 > **Telephony & AI Services Setup**
 > To build this channel, we need to integrate with external voice providers. How would you like to handle these?
 > 
-> 1. **Telephony**: You mentioned Twilio's SMS authentication is failing. Instead of being blocked by Twilio, we are going to pivot: we will build a **Web-based Voice Feature** directly into your frontend! You will click a "Call AI" button on the web app, speak into your computer microphone, and hear the AI talk back. The backend architecture remains exactly the same (a WebSocket handling audio), so when Twilio works for you later, it's an easy plug-and-play.
+> 1. **Telephony**: You mentioned Twilio's SMS authentication is failing. Instead of being blocked by Twilio, we pivoted: we built a **Web-based Voice Feature** directly into your frontend! You will click a "Call AI" button on the web app, speak into your computer microphone, and hear the AI talk back. The backend architecture remains exactly the same (a WebSocket handling audio), so when you need SIP later, it's an easy plug-and-play.
 > 2. **Speech-to-Text (STT)**: Deepgram API Key received.
-> 3. **Text-to-Speech (TTS)**: ElevenLabs API Key received.
+> 3. **Text-to-Speech (TTS)**: Microsoft Edge TTS used (free tier to bypass API limits).
 
 ## Proposed Changes
 
@@ -1678,29 +1678,29 @@ The goal of this Epic is to add a full telephony pipeline to Ladeway, allowing t
 #### [NEW] [docs/design/voice-fallback-design.md](file:///d:/logistics/docs/design/voice-fallback-design.md)
 - Write the foundational design documents defining how we handle latency budgets (<1.5s), silence detection, and telephony orchestration.
 
-### Phase 28-31: Twilio & Media Streams WebSocket
+### Phase 28-31: Web Audio & Media Streams WebSocket
 #### [MODIFY] [package.json](file:///d:/logistics/package.json)
-- Install `twilio`, `ws`, and `@nestjs/platform-ws` for handling bidirectional audio streams.
+- Install `ws`, and `@nestjs/platform-ws` for handling bidirectional audio streams.
 #### [NEW] [apps/api/src/voice/voice.module.ts](file:///d:/logistics/apps/api/src/voice/voice.module.ts)
 - Create a dedicated NestJS module for voice orchestration.
 #### [NEW] [apps/api/src/voice/voice.gateway.ts](file:///d:/logistics/apps/api/src/voice/voice.gateway.ts)
-- Implement the WebSocket server to receive Twilio Media Streams (raw µ-law audio bytes) in real-time.
+- Implement the WebSocket server to receive Browser Media Streams in real-time.
 
 ### Phase 32-35: Voice Pipeline Integration
 #### [NEW] [apps/api/src/voice/voice-orchestrator.service.ts](file:///d:/logistics/apps/api/src/voice/voice-orchestrator.service.ts)
 - Pipe the streaming transcribed text from the caller into our existing `ConversationService`.
-- Pipe the AI's streaming response out to the TTS provider and push the synthesized audio bytes back down the Twilio WebSocket.
+- Pipe the AI's streaming response out to the TTS provider and push the synthesized audio bytes back down the WebSocket.
 - Implement **Barge-In**: If the user speaks while the AI is playing audio, halt the playback instantly.
 - Implement **Silence Detection**: If the user doesn't speak for 10 seconds, trigger a re-prompt.
 
 ### Phase 36-37: Persistence & Transfer
 #### [MODIFY] [apps/api/src/voice/voice-orchestrator.service.ts](file:///d:/logistics/apps/api/src/voice/voice-orchestrator.service.ts)
-- Implement `TRIGGER_TRANSFER` to forward the live call to a human agent using Twilio `<Dial>`.
-- Save the final voice transcript and Twilio Call Recording URL to the `Conversation` database record.
+- Implement `TRIGGER_TRANSFER` to forward the live call to a human agent in the browser.
+- Save the final voice transcript and recording URL to the `Conversation` database record.
 
 ### Phase 38-42: Testing, Admin Config, & Retro
 - **Automated/Manual Tests**: Run full qualification calls, measure latency (Speech-End to Audio-Start), and test interruption edge cases.
-- **Admin UI**: Extend the web frontend so a tenant can configure their Twilio phone number directly in the IndustryConfig dashboard.
+- **Admin UI**: Extend the web frontend so a tenant can configure their Voice settings directly in the IndustryConfig dashboard.
 - **Retro**: Produce `docs/retros/epic-2.md` documenting our learnings from the voice integration.
 
 ## Verification Plan
@@ -1712,9 +1712,9 @@ The goal of this Epic is to add a full telephony pipeline to Ladeway, allowing t
 - We will literally call the provisioned phone number.
 - We will speak to the AI, intentionally interrupt it to test barge-in, stay silent to test re-prompting, and verify that the call transcript is properly saved to the database.
 
-# Epic 2: Voice Channel (Twilio) - Phases 25-42
+# Epic 2: Voice Channel (Web Audio) - Phases 25-42
 
-*Note: I previously mentioned this epic would be "Performance & Scale", but according to our official roadmap, Epic 2 is actually the massive **Voice Channel (Twilio)** integration! This plan maps out how we will implement it.*
+*Note: I previously mentioned this epic would be "Performance & Scale", but according to our official roadmap, Epic 2 is actually the massive **Voice Channel (Web Audio)** integration! This plan maps out how we will implement it.*
 
 The goal of this Epic is to add a full telephony pipeline to Ladeway, allowing tenants to configure a phone number that AI can answer, hold a spoken conversation, qualify the lead, and extract fields—all reusing the exact same LLM conversation engine we built for the web chat.
 
@@ -1730,9 +1730,9 @@ The goal of this Epic is to add a full telephony pipeline to Ladeway, allowing t
 > **Telephony & AI Services Setup**
 > To build this channel, we need to integrate with external voice providers. How would you like to handle these?
 > 
-> 1. **Telephony**: You mentioned Twilio's SMS authentication is failing. Instead of being blocked by Twilio, we are going to pivot: we will build a **Web-based Voice Feature** directly into your frontend! You will click a "Call AI" button on the web app, speak into your computer microphone, and hear the AI talk back. The backend architecture remains exactly the same (a WebSocket handling audio), so when Twilio works for you later, it's an easy plug-and-play.
+> 1. **Telephony**: You mentioned Twilio's SMS authentication is failing. Instead of being blocked by Twilio, we pivoted: we built a **Web-based Voice Feature** directly into your frontend! You will click a "Call AI" button on the web app, speak into your computer microphone, and hear the AI talk back. The backend architecture remains exactly the same (a WebSocket handling audio), so when you need SIP later, it's an easy plug-and-play.
 > 2. **Speech-to-Text (STT)**: Deepgram API Key received.
-> 3. **Text-to-Speech (TTS)**: ElevenLabs API Key received.
+> 3. **Text-to-Speech (TTS)**: Microsoft Edge TTS used (free tier to bypass API limits).
 
 ## Proposed Changes
 
@@ -1742,29 +1742,29 @@ The goal of this Epic is to add a full telephony pipeline to Ladeway, allowing t
 #### [NEW] [docs/design/voice-fallback-design.md](file:///d:/logistics/docs/design/voice-fallback-design.md)
 - Write the foundational design documents defining how we handle latency budgets (<1.5s), silence detection, and telephony orchestration.
 
-### Phase 28-31: Twilio & Media Streams WebSocket
+### Phase 28-31: Web Audio & Media Streams WebSocket
 #### [MODIFY] [package.json](file:///d:/logistics/package.json)
-- Install `twilio`, `ws`, and `@nestjs/platform-ws` for handling bidirectional audio streams.
+- Install `ws`, and `@nestjs/platform-ws` for handling bidirectional audio streams.
 #### [NEW] [apps/api/src/voice/voice.module.ts](file:///d:/logistics/apps/api/src/voice/voice.module.ts)
 - Create a dedicated NestJS module for voice orchestration.
 #### [NEW] [apps/api/src/voice/voice.gateway.ts](file:///d:/logistics/apps/api/src/voice/voice.gateway.ts)
-- Implement the WebSocket server to receive Twilio Media Streams (raw µ-law audio bytes) in real-time.
+- Implement the WebSocket server to receive Browser Media Streams in real-time.
 
 ### Phase 32-35: Voice Pipeline Integration
 #### [NEW] [apps/api/src/voice/voice-orchestrator.service.ts](file:///d:/logistics/apps/api/src/voice/voice-orchestrator.service.ts)
 - Pipe the streaming transcribed text from the caller into our existing `ConversationService`.
-- Pipe the AI's streaming response out to the TTS provider and push the synthesized audio bytes back down the Twilio WebSocket.
+- Pipe the AI's streaming response out to the TTS provider and push the synthesized audio bytes back down the WebSocket.
 - Implement **Barge-In**: If the user speaks while the AI is playing audio, halt the playback instantly.
 - Implement **Silence Detection**: If the user doesn't speak for 10 seconds, trigger a re-prompt.
 
 ### Phase 36-37: Persistence & Transfer
 #### [MODIFY] [apps/api/src/voice/voice-orchestrator.service.ts](file:///d:/logistics/apps/api/src/voice/voice-orchestrator.service.ts)
-- Implement `TRIGGER_TRANSFER` to forward the live call to a human agent using Twilio `<Dial>`.
-- Save the final voice transcript and Twilio Call Recording URL to the `Conversation` database record.
+- Implement `TRIGGER_TRANSFER` to forward the live call to a human agent in the browser.
+- Save the final voice transcript and recording URL to the `Conversation` database record.
 
 ### Phase 38-42: Testing, Admin Config, & Retro
 - **Automated/Manual Tests**: Run full qualification calls, measure latency (Speech-End to Audio-Start), and test interruption edge cases.
-- **Admin UI**: Extend the web frontend so a tenant can configure their Twilio phone number directly in the IndustryConfig dashboard.
+- **Admin UI**: Extend the web frontend so a tenant can configure their Voice settings directly in the IndustryConfig dashboard.
 - **Retro**: Produce `docs/retros/epic-2.md` documenting our learnings from the voice integration.
 
 ## Verification Plan

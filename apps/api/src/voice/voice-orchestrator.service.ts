@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createClient, LiveClient, LiveTranscriptionEvents } from '@deepgram/sdk';
-import { ElevenLabsClient } from 'elevenlabs';
+import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
 import { ConversationService } from '../conversation/conversation.service';
 import { WebSocket } from 'ws';
 
@@ -9,10 +9,9 @@ import { WebSocket } from 'ws';
 export class VoiceOrchestratorService {
   private readonly logger = new Logger(VoiceOrchestratorService.name);
   private deepgramApiKey: string;
-  private elevenLabsApiKey: string;
-
   private deepgramClient: any;
-  private elevenLabsClient: ElevenLabsClient;
+
+  private ttsClient: MsEdgeTTS;
 
   // Active call state
   private activeCalls = new Map<string, {
@@ -29,13 +28,14 @@ export class VoiceOrchestratorService {
     private conversationService: ConversationService
   ) {
     this.deepgramApiKey = this.configService.get<string>('DEEPGRAM_API_KEY') || '';
-    this.elevenLabsApiKey = this.configService.get<string>('ELEVENLABS_API_KEY') || '';
-    
+
     this.logger.log(`Deepgram key present: ${!!this.deepgramApiKey}`);
-    this.logger.log(`ElevenLabs key present: ${!!this.elevenLabsApiKey}, starts with: ${this.elevenLabsApiKey.substring(0, 5)}...`);
 
     this.deepgramClient = createClient(this.deepgramApiKey);
-    this.elevenLabsClient = new ElevenLabsClient({ apiKey: this.elevenLabsApiKey });
+    this.ttsClient = new MsEdgeTTS();
+    this.ttsClient.setMetadata('en-US-AriaNeural', OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3).catch(e => {
+      this.logger.error('Failed to initialize Edge TTS metadata: ' + e.message);
+    });
   }
 
   async handleNewCall(callId: string, clientWs: WebSocket, configId: string) {
@@ -52,9 +52,10 @@ export class VoiceOrchestratorService {
       encoding: 'linear16',
       sample_rate: 16000,
       // Enable utterance end detection — waits for user to stop talking
-      utterance_end_ms: 1200,
+      utterance_end_ms: 3000,
       interim_results: true,
       vad_events: true,
+      keepalive: true,
     });
 
     stt.on(LiveTranscriptionEvents.Open, () => {
@@ -71,6 +72,13 @@ export class VoiceOrchestratorService {
       const call = this.activeCalls.get(callId);
       if (!call) return;
 
+      // Barge-in: if user starts speaking, tell frontend to stop any playing AI audio
+      if (transcript.trim().length > 0) {
+        if (clientWs.readyState === WebSocket.OPEN) {
+          clientWs.send(JSON.stringify({ type: 'interrupt' }));
+        }
+      }
+
       if (data.is_final) {
         // Final transcript for this speech segment — accumulate it
         call.utteranceBuffer += (call.utteranceBuffer ? ' ' : '') + transcript;
@@ -81,11 +89,11 @@ export class VoiceOrchestratorService {
           clientWs.send(JSON.stringify({ type: 'transcript', text: call.utteranceBuffer }));
         }
 
-        // Reset the debounce timer — wait 1.5s of silence before processing
+        // Reset the debounce timer — wait 3s of silence before processing
         if (call.utteranceTimer) clearTimeout(call.utteranceTimer);
         call.utteranceTimer = setTimeout(() => {
           this.flushUtterance(callId);
-        }, 1500);
+        }, 3000);
       }
     });
 
@@ -143,6 +151,11 @@ export class VoiceOrchestratorService {
     }
   }
 
+  handleTextInput(callId: string, text: string) {
+    this.logger.log(`[Manual Text Input] Processing: "${text}"`);
+    this.processCallerUtterance(callId, text);
+  }
+
   handleDisconnect(callId: string) {
     const call = this.activeCalls.get(callId);
     if (call) {
@@ -157,13 +170,11 @@ export class VoiceOrchestratorService {
    */
   private async synthesizeAndSend(clientWs: WebSocket, text: string, label: string) {
     try {
+      // Ensure metadata is always set before synthesizing (passing empty object to fix msedge-tts bug)
+      await this.ttsClient.setMetadata('en-US-AriaNeural', OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3, { voiceLocale: 'en-US' });
       this.logger.log(`[TTS ${label}] Synthesizing: "${text.substring(0, 60)}..."`);
       
-      const audioStream = await this.elevenLabsClient.textToSpeech.convertAsStream('JBFqnCBsd6RMkjVDRZzb', {
-        text,
-        model_id: 'eleven_multilingual_v2',
-        output_format: 'mp3_44100_128',
-      });
+      const { audioStream } = this.ttsClient.toStream(text);
 
       const chunks: Buffer[] = [];
       for await (const chunk of audioStream as any) {
@@ -192,15 +203,12 @@ export class VoiceOrchestratorService {
     this.logger.log(`Will route to AI: ${transcript}`);
     
     try {
-      // 1. Stream LLM response, split into sentences for fast TTS
+      // Stream LLM response
       let fullText = '';
-      let sentenceBuffer = '';
       const responseStream = this.conversationService.sendMessage(
         call.sessionToken,
         transcript
       );
-
-      const sentences: string[] = [];
 
       for await (const chunk of responseStream) {
         // Skip metadata chunks
@@ -210,61 +218,17 @@ export class VoiceOrchestratorService {
         }
         
         fullText += chunk;
-        sentenceBuffer += chunk;
-        
-        // Split on sentence boundaries
-        const sentenceMatch = sentenceBuffer.match(/^(.*?[.!?])\s*/);
-        if (sentenceMatch) {
-          sentences.push(sentenceMatch[1]);
-          sentenceBuffer = sentenceBuffer.substring(sentenceMatch[0].length);
-        }
       }
       
-      if (sentenceBuffer.trim()) {
-        sentences.push(sentenceBuffer.trim());
-      }
-
       fullText = fullText.trim();
       this.logger.log(`[AI Response]: ${fullText}`);
 
       if (!fullText) {
         fullText = 'I apologize, I did not catch that.';
-        sentences.push(fullText);
       }
 
-      // Send full text to UI immediately
-      if (call.clientWs.readyState === WebSocket.OPEN) {
-        call.clientWs.send(JSON.stringify({ type: 'ai_response', text: fullText }));
-      }
-
-      // 2. Synthesize each sentence and send audio as it's ready
-      for (const sentence of sentences) {
-        if (!sentence.trim()) continue;
-        this.logger.log(`[TTS sentence] "${sentence.substring(0, 50)}"`);
-        
-        try {
-          const audioStream = await this.elevenLabsClient.textToSpeech.convertAsStream('JBFqnCBsd6RMkjVDRZzb', {
-            text: sentence,
-            model_id: 'eleven_multilingual_v2',
-            output_format: 'mp3_44100_128',
-          });
-
-          const chunks: Buffer[] = [];
-          for await (const chunk of audioStream as any) {
-            chunks.push(Buffer.from(chunk));
-          }
-          const buf = Buffer.concat(chunks);
-          
-          if (call.clientWs.readyState === WebSocket.OPEN) {
-            call.clientWs.send(JSON.stringify({
-              type: 'audio',
-              audioBase64: buf.toString('base64'),
-            }));
-          }
-        } catch (ttsErr: any) {
-          this.logger.error(`[TTS sentence] Error: ${ttsErr.message}`);
-        }
-      }
+      // Synthesize entire response at once for perfectly smooth playback
+      await this.synthesizeAndSend(call.clientWs, fullText, 'response');
       
     } catch (error: any) {
       this.logger.error(`Error in voice pipeline: ${error.message}`, error.stack || error);

@@ -39,7 +39,7 @@ A demo proves a concept works. A market-ready product proves it survives contact
 | One happy path tested manually | Automated test suite covering edge cases |
 | Errors sometimes crash the flow | Every failure mode has a graceful fallback |
 | No monitoring — you find bugs by luck | Observability tells you about bugs before users do |
-| Chat only | Chat + Voice (Twilio) + SMS |
+| Chat only | Chat + Web Voice + SMS |
 | Free-tier hosting, cold starts | Production hosting, no cold starts, autoscaling awareness |
 | No billing — imaginary "plans" | Real Stripe subscription billing |
 | Manual config only | Knowledge base with retrieval-augmented answers |
@@ -98,7 +98,7 @@ You are not expected to run every feature through all six stages formally — bu
 - **Error handling** — audit every service for unhandled promise rejections and silent failures
 
 ### Being added new:
-- Voice channel via Twilio (the single biggest addition)
+- Voice channel via Web Audio API (the single biggest addition)
 - Stripe billing and subscription management
 - Knowledge base with vector search (RAG)
 - Campaign manager (outbound calling/messaging)
@@ -113,10 +113,8 @@ You are not expected to run every feature through all six stages formally — bu
 
 ## 5. New Capability Areas (The Big Additions)
 
-### 5.1 Voice Channel — Twilio Integration
-This is the headline addition and mirrors what Resonate (the tool Neal showed you) actually does. Customers will be able to **call a real phone number** and have the same qualification conversation by voice that they currently have by chat — same underlying engine, new input/output layer.
-
-Requires: Twilio Voice + Media Streams, a speech-to-text pipeline (streaming), a text-to-speech pipeline, and a real-time orchestration layer handling turn-taking and barge-in (interruption handling). This is genuinely the hardest technical addition in the whole roadmap and the one with the most learning value — real-time systems, audio streaming, and low-latency constraints are a different discipline from typical CRUD work.
+### 5.1 Voice Channel — Web Audio Integration
+Requires: Browser WebSockets, a speech-to-text pipeline (Deepgram Nova-2 streaming), a text-to-speech pipeline (Microsoft Edge TTS), and a real-time orchestration layer handling turn-taking and barge-in (interruption handling). This is genuinely the hardest technical addition in the whole roadmap and the one with the most learning value — real-time systems, audio streaming, and low-latency constraints are a different discipline from typical CRUD work.
 
 ### 5.2 Billing — Stripe Subscriptions
 Real subscription tiers (Starter / Growth / Enterprise), usage-based add-ons (extra conversation minutes), Stripe Checkout for signup, Stripe Customer Portal for self-service plan management, and webhook handling for subscription lifecycle events (renewals, failures, cancellations). This teaches you the parts of SaaS engineering that portfolios almost never cover — payment webhooks are notoriously tricky to get right.

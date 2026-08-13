@@ -804,7 +804,7 @@ We configured **Sentry** and a **Discord Webhook**. A global exception filter in
 # Epic 2: Real-Time Voice AI Pipeline
 
 ## Overview
-Epic 2 introduces a full-duplex, real-time voice AI pipeline to Ladeway, enabling end-users to have natural phone-call-like conversations with the AI qualification agent. The system captures microphone audio, transcribes it via Deepgram, processes it through the existing LLM conversation engine, and synthesizes spoken responses via ElevenLabs TTS — all over a persistent WebSocket connection.
+Epic 2 introduces a full-duplex, real-time voice AI pipeline to Ladeway, enabling end-users to have natural phone-call-like conversations with the AI qualification agent. The system captures microphone audio, transcribes it via Deepgram, processes it through the existing LLM conversation engine, and synthesizes spoken responses via Microsoft Edge TTS — all over a persistent WebSocket connection.
 
 ## Architecture
 
@@ -812,7 +812,7 @@ Epic 2 introduces a full-duplex, real-time voice AI pipeline to Ladeway, enablin
 Browser Mic → AudioContext (PCM 16kHz) → WebSocket → NestJS VoiceGateway
     → Deepgram Nova-2 (STT) → Utterance Buffer (debounce 1.5s)
     → ConversationService.sendMessage() → LLM (Groq)
-    → Sentence Splitter → ElevenLabs TTS (MP3) → WebSocket → Browser Audio Queue
+    → Sentence Splitter → Microsoft Edge TTS (MP3) → WebSocket → Browser Audio Queue
 ```
 
 ## What was built
@@ -832,11 +832,11 @@ Key design decisions:
 #### [NEW] [voice-orchestrator.service.ts](file:///d:/logistics/apps/api/src/voice/voice-orchestrator.service.ts)
 The core voice pipeline service managing:
 
-- **Deepgram Live STT**: Connects to Deepgram's Nova-2 model with `linear16` encoding at 16kHz. Configured with `utterance_end_ms: 1200` and `vad_events: true` for intelligent end-of-speech detection.
-- **Utterance Buffering**: Instead of processing each Deepgram final transcript immediately (which caused the AI to interrupt the user mid-sentence), transcripts are accumulated in a buffer. The buffer only flushes after 1.5 seconds of silence OR when Deepgram fires an `UtteranceEnd` event — whichever comes first. This lets users complete multi-segment thoughts naturally.
-- **ElevenLabs TTS**: Synthesizes AI responses using the `eleven_multilingual_v2` model in `mp3_44100_128` format. Audio is buffered server-side and sent as base64-encoded JSON over the WebSocket.
-- **Sentence-level streaming**: LLM responses are split on sentence boundaries (`.` `!` `?`) and each sentence is synthesized independently. The first sentence starts playing while the rest are still being generated, dramatically reducing perceived latency.
-- **Metadata filtering**: The `_done` JSON metadata chunk from `ConversationService.sendMessage()` is filtered out before TTS synthesis, preventing the AI from speaking raw JSON.
+- **Deepgram Live STT**: Connects to Deepgram's Nova-2 model with `linear16` encoding at 16kHz. Configured with `utterance_end_ms: 3000`, `vad_events: true`, and `keepalive: true` to prevent timeouts and allow the user to pause naturally without being interrupted.
+- **Utterance Buffering**: Instead of processing each Deepgram final transcript immediately, transcripts are accumulated in a buffer. The buffer only flushes after 3 seconds of silence OR when Deepgram fires an `UtteranceEnd` event — whichever comes first. This lets users complete multi-segment thoughts naturally.
+- **Microsoft Edge TTS**: Synthesizes AI responses using the `en-US-AriaNeural` high-quality neural voice in `mp3` format. Audio is buffered server-side and sent as base64-encoded JSON over the WebSocket. Completely free without API quotas.
+- **Smooth Audio Cadence**: LLM responses are processed and synthesized as a full chunk at once instead of sentence-by-sentence, avoiding unnatural pauses in the TTS playback.
+- **Hybrid Voice/Text Entry**: For details that voice AI commonly misunderstands (like unique names and emails), the `VoiceWidget` includes a manual text input. If the AI asks for an email, phone, or name, the text box automatically focuses, allowing the user to seamlessly type the detail and submit it directly to the AI.
 
 ### 2. Voice Widget (Frontend)
 
@@ -854,14 +854,14 @@ Voice demo page that renders the `VoiceWidget` with the config ID from the URL.
 ### 3. Dependencies Added
 
 - `@deepgram/sdk` — Real-time speech-to-text
-- `elevenlabs` — Text-to-speech synthesis
+- `msedge-tts` — Text-to-speech synthesis without API keys
 - `@nestjs/platform-ws` + `ws` — WebSocket adapter for NestJS
 
 ### 4. Configuration
 
 Required environment variables in `apps/api/.env`:
 - `DEEPGRAM_API_KEY` — Deepgram API key for STT
-- `ELEVENLABS_API_KEY` — ElevenLabs API key (must start with `sk_`)
+
 
 ## Key Technical Challenges Resolved
 
@@ -869,11 +869,13 @@ Required environment variables in `apps/api/.env`:
 |---|---|---|
 | Audio not reaching Deepgram | `@SubscribeMessage('audio_in')` requires JSON framing; raw binary was silently dropped | Direct `client.on('message')` listener in gateway |
 | Browser sends WebM, Deepgram expects PCM | `MediaRecorder` outputs compressed WebM/Opus codec | `AudioContext` + `ScriptProcessor` captures raw Float32, converts to Int16 PCM at 16kHz |
-| TTS audio not playing in browser | Raw PCM has no container headers; `<audio>` can't play headerless data | Request MP3 format from ElevenLabs, send as base64 JSON |
+| TTS audio not playing in browser | Raw PCM has no container headers; `<audio>` can't play headerless data | Request MP3 format from Microsoft Edge TTS, send as base64 JSON |
 | Audio element re-mounting | React conditional rendering created two `<audio>` elements; event listeners attached to wrong one | Create `Audio` imperatively in `useEffect`, persist across renders |
-| AI interrupting user mid-sentence | Each Deepgram `is_final` transcript triggered immediate LLM response | Utterance buffer with 1.5s debounce + Deepgram `utterance_end_ms` |
+| AI interrupting user mid-sentence | Each Deepgram `is_final` transcript triggered immediate LLM response | Utterance buffer with 3s debounce + Deepgram `utterance_end_ms: 3000` |
+| Deepgram closing mid-call | The websocket timed out during long silences | Added `keepalive: true` to Deepgram Live connection options |
 | LLM metadata in spoken response | `sendMessage()` yields `{"_done":true,...}` metadata chunk | Filter chunks containing `"_done":true` before concatenation |
-| ElevenLabs API key rejected | User provided the API Key ID instead of the secret key | Diagnosed via API error message; key must start with `sk_` |
+| Microsoft Edge TTS metadata bug | Library requires metadata argument even for defaults | Passed empty `voiceLocale` object to bypass the runtime error |
+| Spelling out emails/names | STT struggles with unique names and domain spellings | Added Hybrid Text Input to `VoiceWidget` for manual typing |
 
 ## Files Changed
 
@@ -888,13 +890,13 @@ Required environment variables in `apps/api/.env`:
 - [app.module.ts](file:///d:/logistics/apps/api/src/app.module.ts) — Registered `VoiceModule`
 - [main.ts](file:///d:/logistics/apps/api/src/main.ts) — Added `WsAdapter`
 - [conversation.module.ts](file:///d:/logistics/apps/api/src/conversation/conversation.module.ts) — Exported `ConversationService`
-- [package.json](file:///d:/logistics/apps/api/package.json) — Added `@deepgram/sdk`, `elevenlabs`, `@nestjs/platform-ws`, `ws`
+- [package.json](file:///d:/logistics/apps/api/package.json) — Added `@deepgram/sdk`, `msedge-tts`, `@nestjs/platform-ws`, `ws`
 - [HelpWidget.tsx](file:///d:/logistics/apps/web/components/ui/HelpWidget.tsx) — Added `voice` context type
 
 ## Verification
 - ✅ Backend compiles cleanly (`npx tsc --noEmit`)
 - ✅ Deepgram STT successfully transcribes user speech in real-time
-- ✅ ElevenLabs TTS generates MP3 audio and sends to client
+- ✅ Microsoft Edge TTS generates MP3 audio and sends to client
 - ✅ AI greeting text and audio delivered on call start
 - ✅ Full conversation loop: User speaks → STT → LLM → TTS → Audio playback
 - ✅ Utterance buffering prevents AI from interrupting user

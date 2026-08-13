@@ -7,16 +7,20 @@ import { tenantContext } from '../tenant/tenant.context';
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   public readonly $system: PrismaClient;
+  private readonly pool: Pool;
 
   constructor() {
     const pool = new Pool({ 
       connectionString: process.env.DATABASE_URL,
       max: 50,
-      connectionTimeoutMillis: 15000 
+      connectionTimeoutMillis: 15000,
+      idleTimeoutMillis: 30000 
     });
     const adapter = new PrismaPg(pool);
     super({ adapter, log: ['error', 'warn'] });
     
+    this.pool = pool;
+
     // Save the raw unextended client for system-level operations (like Auth)
     this.$system = this;
 
@@ -38,8 +42,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
               return result;
             } else {
               // If no tenant context, we still need to restrict to authenticated so it blocks queries
-              // Wait, if no tenant context is set (e.g. background job), what should it do? 
-              // If we are testing RLS blocking, we can set the role to authenticated and clear the setting.
               const [, , result] = await self.$transaction([
                 self.$executeRawUnsafe(`SET LOCAL ROLE authenticated`),
                 self.$executeRawUnsafe(`SELECT set_config('app.current_tenant_id', '', true)`),
@@ -61,5 +63,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   async onModuleDestroy() {
     await this.$disconnect();
+    await this.pool.end();
   }
 }

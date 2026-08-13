@@ -24,14 +24,17 @@ export class VoiceGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.logger.log(`Client connected to Voice Gateway: ${callId}`);
 
     // Listen for ALL incoming messages (binary audio frames from the browser)
-    client.on('message', (data: Buffer | string, isBinary: boolean) => {
-      if (isBinary || Buffer.isBuffer(data)) {
-        this.orchestrator.handleAudioIn(callId, Buffer.from(data as any));
+    client.on('message', (data: any, isBinary: boolean) => {
+      if (isBinary) {
+        this.orchestrator.handleAudioIn(callId, Buffer.from(data));
       } else {
         // Could be a JSON control message from the frontend
         try {
           const msg = JSON.parse(data.toString());
-          this.logger.log(`Control message from client: ${JSON.stringify(msg)}`);
+          if (msg.type === 'text_input') {
+            this.logger.log(`Received manual text input: ${msg.text}`);
+            this.orchestrator.handleTextInput(callId, msg.text);
+          }
         } catch {
           // Not JSON, ignore
         }
