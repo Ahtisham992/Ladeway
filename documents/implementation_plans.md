@@ -1816,3 +1816,47 @@ None.
 - Start a voice call. Observe that the AI speaks without filler words.
 - Wait for the AI to ask for contact details and verify the specific popups appear.
 - Finish the conversation and verify the lead is not immediately generated, but appears in the database exactly 5 minutes later.
+
+
+# Marketing and Legal Pages Implementation
+
+This plan outlines the creation of the 11 requested marketing and legal pages, ensuring consistent theming, navigation, and layout across the entire Ladeway application.
+
+## User Review Required
+Please review the proposed URLs for the pages below. Are you happy with this route structure?
+
+## Open Questions
+- I will generate professional placeholder content for these pages. Will you be supplying the actual legal text (Privacy Policy, Terms, etc.) later? 
+
+## Proposed Changes
+
+### Layout Refactoring
+To ensure the theme is consistent across all these new pages without duplicating code, I will extract the Header and Footer currently located inside your Home Page into reusable components.
+#### [NEW] `apps/web/components/layout/Header.tsx`
+#### [NEW] `apps/web/components/layout/Footer.tsx`
+#### [MODIFY] `apps/web/app/page.tsx` (Refactor to use new components)
+
+### Product Pages
+#### [NEW] `apps/web/app/product/features/page.tsx`
+#### [NEW] `apps/web/app/product/integrations/page.tsx`
+#### [NEW] `apps/web/app/product/pricing/page.tsx`
+#### [NEW] `apps/web/app/product/changelog/page.tsx`
+
+### Company Pages
+#### [NEW] `apps/web/app/company/about/page.tsx`
+#### [NEW] `apps/web/app/company/careers/page.tsx`
+#### [NEW] `apps/web/app/company/blog/page.tsx`
+#### [NEW] `apps/web/app/company/contact/page.tsx`
+
+### Legal Pages
+#### [NEW] `apps/web/app/legal/privacy/page.tsx`
+#### [NEW] `apps/web/app/legal/terms/page.tsx`
+#### [NEW] `apps/web/app/legal/cookies/page.tsx`
+
+## Verification Plan
+### Automated Tests
+- N/A
+
+### Manual Verification
+- Navigate to the Home Page and verify the Header and Footer render perfectly.
+- Click on all the links in the footer and verify they successfully navigate to the new beautifully themed pages.

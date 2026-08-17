@@ -931,3 +931,40 @@ You can now open the Voice page in your application and begin a test call.
 - Observe how the AI no longer uses filler words.
 - Wait for it to ask for an email, and see the dedicated popup appear.
 - Finish the conversation, and check the backend logs or database 5 minutes later to see the lead generated!
+
+
+# Marketing and Legal Pages Implementation
+
+I have successfully created all 11 static marketing and legal pages for Ladeway, ensuring a perfectly consistent design system and user experience across the entire site.
+
+## What was implemented
+
+### 1. Reusable Layout Components
+To prevent code duplication and ensure your site scales effortlessly, I extracted the navigation and footer elements from the Home Page into their own dedicated components:
+- [Header](file:///d:/logistics/apps/web/components/layout/Header.tsx)
+- [Footer](file:///d:/logistics/apps/web/components/layout/Footer.tsx)
+
+These components are now imported on every single marketing page, guaranteeing that the logo, links, and overall styling are perfectly in sync.
+
+### 2. Product Pages
+I created clean, modern placeholder layouts for your core product offerings:
+- [Features](file:///d:/logistics/apps/web/app/product/features/page.tsx)
+- [Integrations](file:///d:/logistics/apps/web/app/product/integrations/page.tsx)
+- [Pricing](file:///d:/logistics/apps/web/app/product/pricing/page.tsx) (Features a beautiful tier-based UI card layout)
+- [Changelog](file:///d:/logistics/apps/web/app/product/changelog/page.tsx) (Features a vertical timeline layout)
+
+### 3. Company Pages
+I built out the organizational sections of the site:
+- [About Us](file:///d:/logistics/apps/web/app/company/about/page.tsx)
+- [Careers](file:///d:/logistics/apps/web/app/company/careers/page.tsx)
+- [Blog](file:///d:/logistics/apps/web/app/company/blog/page.tsx) (Includes a grid of beautifully styled article cards)
+- [Contact](file:///d:/logistics/apps/web/app/company/contact/page.tsx) (Includes a highly styled contact form)
+
+### 4. Legal Pages
+Finally, I generated standard boilerplate templates for your legal and compliance requirements. *(Note: You should review these texts with legal counsel prior to launching)*:
+- [Privacy Policy](file:///d:/logistics/apps/web/app/legal/privacy/page.tsx)
+- [Terms of Service](file:///d:/logistics/apps/web/app/legal/terms/page.tsx)
+- [Cookie Policy](file:///d:/logistics/apps/web/app/legal/cookies/page.tsx)
+
+## Validation
+I've updated the [Home Page](file:///d:/logistics/apps/web/app/page.tsx) to utilize the new Header and Footer components. Every link in the footer is now active and routing perfectly to the corresponding Next.js page.

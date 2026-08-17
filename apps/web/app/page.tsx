@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Bot, MessageSquare, Building2, Zap, Target, Layers, CheckCircle, PhoneCall } from 'lucide-react';
-import { Logo } from '@/components/ui/Logo';
+import { Header } from '@/components/layout/Header';
+import { Footer } from '@/components/layout/Footer';
 
 interface TenantInfo {
   name: string;
@@ -40,21 +41,7 @@ export default async function LandingPage() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
-      <header className="bg-white border-b border-border sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center">
-            <Logo />
-          </Link>
-          <div className="flex items-center gap-4">
-            <Link href="/login" className="text-sm font-medium text-secondary hover:text-primary transition-colors">
-              Log in
-            </Link>
-            <Link href="/signup">
-              <Button size="sm" className="bg-primary text-white hover:bg-primary-dark">Get Started</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       <main className="flex-1">
         {/* Hero Section */}
@@ -203,54 +190,7 @@ export default async function LandingPage() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-white border-t border-border pt-16 pb-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
-            <div className="col-span-2 md:col-span-1">
-              <div className="flex items-center mb-4 opacity-70">
-                <Logo />
-              </div>
-              <p className="text-sm text-secondary">
-                Intelligent conversational qualification for modern sales teams.
-              </p>
-            </div>
-            <div>
-              <h4 className="font-semibold text-primary mb-4">Product</h4>
-              <ul className="space-y-2 text-sm text-secondary">
-                <li><a href="#" className="hover:text-primary transition-colors">Features</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Integrations</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Pricing</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Changelog</a></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold text-primary mb-4">Company</h4>
-              <ul className="space-y-2 text-sm text-secondary">
-                <li><a href="#" className="hover:text-primary transition-colors">About Us</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Careers</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Blog</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Contact</a></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold text-primary mb-4">Legal</h4>
-              <ul className="space-y-2 text-sm text-secondary">
-                <li><a href="#" className="hover:text-primary transition-colors">Privacy Policy</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Terms of Service</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Cookie Policy</a></li>
-              </ul>
-            </div>
-          </div>
-          <div className="border-t border-border pt-8 flex flex-col md:flex-row items-center justify-between text-sm text-secondary">
-            <p>&copy; {new Date().getFullYear()} Ladeway Inc. All rights reserved.</p>
-            <div className="flex items-center gap-4 mt-4 md:mt-0">
-              <a href="#" className="hover:text-primary transition-colors">Twitter</a>
-              <a href="#" className="hover:text-primary transition-colors">LinkedIn</a>
-              <a href="#" className="hover:text-primary transition-colors">GitHub</a>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }
