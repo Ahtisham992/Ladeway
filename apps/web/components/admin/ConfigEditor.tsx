@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import { MessageBubble } from '../chat/MessageBubble';
-import { Plus, Trash2, Save, PlayCircle, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Save, PlayCircle, Loader2, Wand2, Sparkles } from 'lucide-react';
 
 const QualificationFieldSchema = z.object({
  key: z.string().min(1, 'Key required'),
@@ -54,7 +54,8 @@ type ConfigAction =
  | { type: 'REMOVE_FIELD'; index: number }
  | { type: 'ADD_RULE' }
  | { type: 'UPDATE_RULE'; index: number; payload: Partial<any> }
- | { type: 'REMOVE_RULE'; index: number };
+ | { type: 'REMOVE_RULE'; index: number }
+ | { type: 'REPLACE_ALL'; payload: ConfigState };
 
 function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
  switch (action.type) {
@@ -100,6 +101,8 @@ function configReducer(state: ConfigState, action: ConfigAction): ConfigState {
  ...state,
  rules: state.rules.filter((_, i) => i !== action.index)
  };
+ case 'REPLACE_ALL':
+ return action.payload;
  default:
  return state;
  }
@@ -126,6 +129,10 @@ export function ConfigEditor({ token, initialConfig }: { token: string; initialC
  const [chatInput, setChatInput] = useState('');
  const [isFieldModalOpen, setIsFieldModalOpen] = useState(false);
  const [newField, setNewField] = useState({ key: '', label: '', type: 'text', required: false, extractionHint: '' });
+ 
+ const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+ const [aiDescription, setAiDescription] = useState('');
+ const [isGenerating, setIsGenerating] = useState(false);
 
  const handleSave = async () => {
  // Validate
@@ -240,6 +247,43 @@ export function ConfigEditor({ token, initialConfig }: { token: string; initialC
  }
  };
 
+ const handleAiGenerate = async () => {
+   if (!aiDescription.trim()) return;
+   setIsGenerating(true);
+   try {
+     const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/industry-configs/generate`, {
+       method: 'POST',
+       headers: {
+         'Content-Type': 'application/json',
+         Authorization: `Bearer ${token}`
+       },
+       body: JSON.stringify({ description: aiDescription })
+     });
+
+     if (res.ok) {
+       const generated = await res.json();
+       dispatch({ type: 'REPLACE_ALL', payload: {
+         industryName: generated.industryName || '',
+         personaName: generated.personaName || '',
+         personaRole: generated.personaRole || '',
+         greeting: generated.greeting || '',
+         tone: generated.tone || 'professional',
+         fields: generated.fieldsJson || [],
+         rules: generated.scoringRulesJson || []
+       }});
+       setIsAiModalOpen(false);
+       setAiDescription('');
+     } else {
+       const err = await res.json();
+       alert(err.message || 'Failed to generate configuration.');
+     }
+   } catch (err) {
+     alert('Network error during generation.');
+   } finally {
+     setIsGenerating(false);
+   }
+ };
+
  return (
  <div className="space-y-6 pb-24">
  <div className="flex items-center justify-between">
@@ -254,9 +298,15 @@ export function ConfigEditor({ token, initialConfig }: { token: string; initialC
  {isPreviewing ? <Loader2 size={16} className="mr-2 animate-spin" /> : <PlayCircle size={16} className="mr-2" />}
  Restart Preview
  </Button>
- <Button onClick={handleSave} disabled={isSaving}>
- {isSaving ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Save size={16} className="mr-2" />}
- Save Configuration
+ </div>
+ <div className="flex gap-4">
+   <Button type="button" variant="outline" onClick={() => setIsAiModalOpen(true)} className="border-purple-500 text-purple-600 hover:bg-purple-50 hover:text-purple-700 shadow-sm transition-all duration-300 group">
+     <Sparkles className="w-4 h-4 mr-2 group-hover:animate-pulse" />
+     Generate with AI
+   </Button>
+ <Button onClick={handleSave} disabled={isSaving} className="bg-primary hover:bg-primary-dark">
+ {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+ {isSaving ? 'Saving...' : 'Save Configuration'}
  </Button>
  </div>
  </div>
@@ -590,6 +640,28 @@ export function ConfigEditor({ token, initialConfig }: { token: string; initialC
  }}>Save Field</Button>
  </div>
  </div>
+ </Modal>
+
+ <Modal isOpen={isAiModalOpen} onClose={() => !isGenerating && setIsAiModalOpen(false)} title="Generate Configuration with AI ✨">
+   <div className="space-y-4">
+     <p className="text-sm text-secondary-600">
+       Describe your business, your target customers, and the exact information you need to collect. Our AI will automatically generate the perfect fields, scoring rules, and persona.
+     </p>
+     <textarea
+       className="w-full h-32 px-3 py-2 text-sm rounded-md border border-input bg-transparent focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
+       placeholder="I run a luxury real estate agency in Dubai. I talk to high-net-worth individuals and I need to find out their budget, preferred location, and timeline to buy..."
+       value={aiDescription}
+       onChange={(e) => setAiDescription(e.target.value)}
+       disabled={isGenerating}
+     />
+     <div className="flex justify-end gap-3 pt-4 border-t">
+       <Button variant="outline" onClick={() => setIsAiModalOpen(false)} disabled={isGenerating}>Cancel</Button>
+       <Button onClick={handleAiGenerate} disabled={!aiDescription.trim() || isGenerating} className="bg-purple-600 hover:bg-purple-700 text-white">
+         {isGenerating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Wand2 className="w-4 h-4 mr-2" />}
+         {isGenerating ? 'Generating...' : 'Generate Now'}
+       </Button>
+     </div>
+   </div>
  </Modal>
  </div>
  );

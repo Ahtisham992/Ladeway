@@ -1974,3 +1974,31 @@ When the AI decides to escalate the call, it will politely inform the user, grac
 1. I will initiate a voice call in the browser.
 2. I will intentionally say an escalation phrase like *"I want to speak to a human manager."*
 3. I will verify that the AI speaks its transfer message, the call cleanly terminates, and the "Call Agent" button with the correct forwarding number appears on the screen.
+
+
+# Epic: AI Configuration Generator (Automated Setup)
+
+You raised a fantastic point: manually building out fields and scoring rules is tedious and error-prone for non-technical users. To solve this, we will build an **AI Configuration Wizard** that asks the user to describe their business and automatically generates the entire `IndustryConfig` structure (including optimal qualification fields, scoring rules, and greetings) using an LLM.
+
+## Proposed Changes
+
+### 1. Backend: AI Generator Service
+- **New Service**: Create `config-generator.service.ts` in the `industry-config` module.
+- **LLM Integration**: We will utilize the Groq SDK with `response_format: { type: "json_object" }` to guarantee that the AI outputs valid JSON matching the exact schema required by our database.
+- **System Prompting**: We will write a highly structured system prompt that explains what "fields" and "scoring rules" are, providing a few-shot examples so the AI knows how to construct conditions like `{"field": "budget", "condition": "greater_than", "value": 1000}`.
+- **New Endpoint**: Add `POST /industry-configs/generate` which accepts `{ description: string }` and returns the generated configuration object.
+
+### 2. Frontend: AI Generation UI
+- **Update `ConfigEditor.tsx`**: Add an eye-catching **"Generate with AI ✨"** button at the top of the editor.
+- **Generation Modal**: Clicking the button opens a modal prompting the user: *"Describe your business, your target customers, and the information you need to qualify a lead."*
+- **State Injection**: When the AI finishes generating, the frontend will take the JSON payload and automatically populate the entire form (Industry, Persona, Greeting, Fields, and Rules).
+- **Human-in-the-Loop**: The user will instantly see all the generated rules visually in the UI and can easily edit, delete, or add to them before hitting "Save Configuration".
+
+## User Review Required
+> [!IMPORTANT]
+> Since we are using Groq for the LLM Router, I will integrate the JSON generator directly using your existing `GROQ_API_KEY`. 
+
+## Verification Plan
+1. I will navigate to `/dashboard/configs/new`.
+2. I will click "Generate with AI" and input a test prompt (e.g., *"I run a luxury real estate agency in Dubai..."*).
+3. I will verify that the AI successfully populates the form with relevant fields (budget, location, timeline), realistic scoring rules, and a tailored greeting.

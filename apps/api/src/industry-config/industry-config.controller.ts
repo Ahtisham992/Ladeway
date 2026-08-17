@@ -1,5 +1,6 @@
-import { Controller, Get, Post, Body, Param, Put, Patch, Delete, UseGuards, UsePipes, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Put, Patch, Delete, UseGuards, UsePipes, Query, BadRequestException } from '@nestjs/common';
 import { IndustryConfigService } from './industry-config.service';
+import { ConfigGeneratorService, GenerateConfigRequest } from './config-generator.service';
 import { CreateIndustryConfigDto, CreateIndustryConfigDtoSchema, UpdateIndustryConfigDto, UpdateIndustryConfigDtoSchema } from './schemas/config.schema';
 import { ZodValidationPipe } from './zod.pipe';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -13,9 +14,19 @@ import { ConversationSession, ConversationStatus } from '../session/types/sessio
 export class IndustryConfigController {
   constructor(
     private readonly industryConfigService: IndustryConfigService,
+    private readonly configGeneratorService: ConfigGeneratorService,
     private readonly llmRouter: LLMRouterService,
     private readonly promptService: PromptService,
   ) {}
+
+  @Post('generate')
+  @UseGuards(JwtAuthGuard)
+  async generateConfig(@Body() body: GenerateConfigRequest) {
+    if (!body.description) {
+      throw new BadRequestException('description is required');
+    }
+    return this.configGeneratorService.generateConfig(body.description);
+  }
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
