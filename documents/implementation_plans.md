@@ -1860,3 +1860,40 @@ To ensure the theme is consistent across all these new pages without duplicating
 ### Manual Verification
 - Navigate to the Home Page and verify the Header and Footer render perfectly.
 - Click on all the links in the footer and verify they successfully navigate to the new beautifully themed pages.
+
+
+# Hero Section Redesign Plan
+
+This plan details the UI overhaul for Ladeway's landing page hero section, drawing inspiration from the professional, two-column layout of Turing Intelligence, but tailored specifically for Ladeway's AI-Powered Lead Qualification engine.
+
+## User Review Required
+Please review the proposed visual concept for the right-hand side. Instead of a camera and microchip, I propose building a dynamic, animated CSS/SVG "Qualification Diagram" that looks like a high-tech blueprint. 
+
+## Proposed Changes
+
+### 1. Refactor Hero Layout (`apps/web/app/page.tsx`)
+Change the hero section from a centered single-column layout to a `grid lg:grid-cols-2 gap-12 items-center text-left` layout.
+
+**Left Column (Content):**
+- **Eyebrow:** "ACCELERATED AI PIPELINES FROM RAW TRAFFIC TO QUALIFIED LEADS"
+- **Headline:** "At Ladeway, we design and build end-to-end qualification systems."
+- **Sub-headline (Vision):** "Our vision: Converting complex conversations into actionable data."
+- **Description:** "Ladeway provides intelligent, industry-agnostic AI agents. We develop software for natural language processing, dynamic scoring, and ultra-low latency voice pipelines."
+- **CTAs:** "Start Free Trial" and "View Live Demos"
+- **Tags (Pills at the bottom):** "VOICE AI", "TEXT CHATBOTS", "DYNAMIC SCORING"
+
+**Right Column (Visual):**
+We will build an intricate, CSS-animated visual representation of Ladeway's architecture, matching the grid/blueprint aesthetic of the inspiration image:
+- **Background:** A subtle blueprint grid.
+- **Node 1 (Input):** A floating chat bubble and a microphone icon representing incoming traffic.
+- **Node 2 (Core):** A central, pulsing "AI Processing Unit" representing the Ladeway engine.
+- **Node 3 (Output):** A stylized "Lead Card" popping out with a "Scored: HOT" badge.
+- **Connectors:** Animated dashed SVG lines connecting the nodes to simulate data flow.
+
+### 2. Add Custom Animations (`apps/web/tailwind.config.ts`)
+If necessary, I will add custom keyframes for subtle floating effects (e.g., `float`, `dash-scroll`) to make the right-column diagram feel alive and professional.
+
+## Verification Plan
+### Manual Verification
+- View the home page locally to ensure the two-column layout breaks down gracefully to a single column on mobile.
+- Verify the SVG animations are smooth, high-performance, and fit the existing color scheme (`#1F4E79`, slate, and off-white).
