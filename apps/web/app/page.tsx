@@ -53,7 +53,7 @@ export default async function LandingPage() {
               <div className="inline-flex items-center text-xs font-bold text-secondary uppercase tracking-widest mb-6 border-b border-border pb-1">
                 Accelerated AI Pipelines from Raw Traffic to Qualified Leads
               </div>
-              <h1 className="text-5xl md:text-6xl font-extrabold text-primary tracking-tight leading-tight mb-6">
+              <h1 className="text-5xl md:text-6xl font-bold text-primary tracking-tight leading-tight mb-6">
                 At Ladeway, we design and build end-to-end qualification systems.
               </h1>
               <p className="text-xl font-medium text-secondary-900 italic mb-6 border-l-4 border-primary pl-4">
@@ -85,28 +85,28 @@ export default async function LandingPage() {
             </div>
 
             {/* Right Visual Column */}
-            <div className="relative hidden lg:block h-[600px] w-full">
+            <div className="relative hidden lg:block aspect-square w-full max-w-[550px] mx-auto">
               {/* Background circular highlight */}
-              <div className="absolute inset-0 bg-gradient-to-tr from-surface to-white rounded-full scale-110 opacity-70 border border-border"></div>
+              <div className="absolute inset-0 bg-gradient-to-tr from-surface to-white rounded-full opacity-70 border border-border"></div>
               
               {/* Grid pattern overlay */}
               <div className="absolute inset-0 rounded-full" style={{ backgroundImage: 'linear-gradient(#E2E8F0 1px, transparent 1px), linear-gradient(90deg, #E2E8F0 1px, transparent 1px)', backgroundSize: '30px 30px', opacity: 0.5, clipPath: 'circle(50% at 50% 50%)' }}></div>
 
               {/* Central Processing Node */}
-              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-48 bg-[#1a1a1a] rounded-xl shadow-2xl border border-gray-700 p-4 z-20 flex flex-col items-center justify-center animate-float">
+              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-56 h-40 bg-[#1a1a1a] rounded-xl shadow-2xl border border-gray-700 p-4 z-20 flex flex-col items-center justify-center animate-float">
                 <div className="text-[10px] text-gray-400 font-mono absolute top-3 left-4 uppercase tracking-widest">Ladeway Core</div>
-                <div className="w-24 h-24 border border-gray-600 rounded-lg flex items-center justify-center relative mt-2">
+                <div className="w-16 h-16 border border-gray-600 rounded-lg flex items-center justify-center relative mt-2">
                   <div className="absolute inset-1 bg-gradient-to-br from-primary to-primary-dark rounded-md opacity-20 animate-pulse-slow"></div>
-                  <Bot className="w-10 h-10 text-primary-light" />
+                  <Bot className="w-8 h-8 text-primary-light" />
                   <div className="absolute -right-1 -top-1 w-2 h-2 bg-green-500 rounded-full animate-ping"></div>
                 </div>
                 <div className="flex gap-1 mt-4">
-                  {[...Array(8)].map((_, i) => <div key={i} className="w-1 h-4 bg-gray-600 rounded-full opacity-50"></div>)}
+                  {[...Array(6)].map((_, i) => <div key={i} className="w-1 h-3 bg-gray-600 rounded-full opacity-50"></div>)}
                 </div>
               </div>
 
               {/* Input Node 1 (Voice) */}
-              <div className="absolute top-24 left-10 w-32 bg-white rounded-lg shadow-lg border border-border p-3 z-30 animate-float-delayed flex items-center gap-3">
+              <div className="absolute top-[15%] left-[5%] w-32 bg-white rounded-lg shadow-lg border border-border p-3 z-30 animate-float-delayed flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
                   <Mic className="w-4 h-4 text-blue-600" />
                 </div>
@@ -114,7 +114,7 @@ export default async function LandingPage() {
               </div>
 
               {/* Input Node 2 (Chat) */}
-              <div className="absolute bottom-32 left-0 w-36 bg-white rounded-lg shadow-lg border border-border p-3 z-30 animate-float flex items-center gap-3">
+              <div className="absolute bottom-[20%] left-[-2%] w-36 bg-white rounded-lg shadow-lg border border-border p-3 z-30 animate-float flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center shrink-0">
                   <MessageSquare className="w-4 h-4 text-purple-600" />
                 </div>
@@ -122,7 +122,7 @@ export default async function LandingPage() {
               </div>
 
               {/* Output Node (Qualified Lead) */}
-              <div className="absolute bottom-24 right-4 w-48 bg-white rounded-xl shadow-xl border border-border p-4 z-30 animate-float-delayed">
+              <div className="absolute bottom-[15%] right-[2%] w-44 bg-white rounded-xl shadow-xl border border-border p-4 z-30 animate-float-delayed">
                 <div className="flex justify-between items-center mb-3">
                   <span className="text-[10px] font-bold text-secondary uppercase tracking-wider">Output</span>
                   <span className="px-2 py-0.5 bg-success/10 text-success text-[10px] font-bold rounded-full border border-success/20">HOT LEAD</span>
@@ -135,26 +135,25 @@ export default async function LandingPage() {
               </div>
 
               {/* Connecting Lines SVG */}
-              <svg className="absolute inset-0 w-full h-full z-10 pointer-events-none" style={{ filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.05))' }}>
+              <svg className="absolute inset-0 w-full h-full z-10 pointer-events-none" viewBox="0 0 550 550" style={{ filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.05))' }}>
                 {/* Voice to Core */}
-                <path d="M 160 110 Q 250 110 320 250" fill="none" stroke="#E2E8F0" strokeWidth="2" strokeDasharray="6,6" className="animate-dash-scroll" />
+                <path d="M 120 120 Q 250 120 275 220" fill="none" stroke="#E2E8F0" strokeWidth="2" strokeDasharray="6,6" className="animate-dash-scroll" />
                 {/* Chat to Core */}
-                <path d="M 140 450 Q 220 450 300 350" fill="none" stroke="#E2E8F0" strokeWidth="2" strokeDasharray="6,6" className="animate-dash-scroll" />
+                <path d="M 100 440 Q 200 440 275 330" fill="none" stroke="#E2E8F0" strokeWidth="2" strokeDasharray="6,6" className="animate-dash-scroll" />
                 {/* Core to Output */}
-                <path d="M 450 350 Q 550 350 550 480" fill="none" stroke="#E2E8F0" strokeWidth="2" strokeDasharray="6,6" className="animate-dash-scroll" />
+                <path d="M 380 330 Q 480 330 480 410" fill="none" stroke="#E2E8F0" strokeWidth="2" strokeDasharray="6,6" className="animate-dash-scroll" />
                 
                 {/* Animated Data Packets (Circles) along paths */}
-                <circle r="4" fill="#1F4E79">
-                  <animateMotion dur="3s" repeatCount="indefinite" path="M 160 110 Q 250 110 320 250" />
+                <circle r="5" fill="#1F4E79">
+                  <animateMotion dur="3s" repeatCount="indefinite" path="M 120 120 Q 250 120 275 220" />
                 </circle>
-                <circle r="4" fill="#1F4E79">
-                  <animateMotion dur="4s" repeatCount="indefinite" path="M 140 450 Q 220 450 300 350" />
+                <circle r="5" fill="#1F4E79">
+                  <animateMotion dur="4s" repeatCount="indefinite" path="M 100 440 Q 200 440 275 330" />
                 </circle>
-                <circle r="4" fill="#15803D">
-                  <animateMotion dur="2.5s" repeatCount="indefinite" path="M 450 350 Q 550 350 550 480" />
+                <circle r="5" fill="#15803D">
+                  <animateMotion dur="2.5s" repeatCount="indefinite" path="M 380 330 Q 480 330 480 410" />
                 </circle>
               </svg>
-
             </div>
           </div>
         </div>
