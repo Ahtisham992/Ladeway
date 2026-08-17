@@ -1,26 +1,25 @@
 "use client"
 
 import * as React from "react"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { VoiceWidget } from "@/components/voice/VoiceWidget"
 import { HelpWidget } from "@/components/ui/HelpWidget"
+import { ArrowLeft } from "lucide-react"
 
 export default function VoicePage() {
   const params = useParams()
+  const router = useRouter()
   const configId = params.configId as string
 
-  React.useEffect(() => {
-    window.history.pushState(null, '', window.location.href)
-    window.onpopstate = () => {
-      window.history.pushState(null, '', window.location.href)
-    }
-    return () => {
-      window.onpopstate = null
-    }
-  }, [])
-
   return (
-    <div className="min-h-screen w-full bg-background flex flex-col items-center p-8">
+    <div className="min-h-screen w-full bg-background flex flex-col items-center p-8 relative">
+      <button 
+        onClick={() => router.push('/')}
+        className="absolute top-8 left-8 flex items-center text-sm font-medium text-secondary hover:text-primary transition-colors"
+      >
+        <ArrowLeft className="w-4 h-4 mr-2" />
+        Back to Home
+      </button>
       <div className="w-full max-w-4xl text-center mb-12 mt-12">
         <h1 className="text-4xl font-extrabold text-secondary-900 mb-4 tracking-tight">
           AI Voice Assistant
