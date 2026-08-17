@@ -21,3 +21,13 @@ We will use **WebSockets and Web Audio API** to provide a seamless voice experie
   - Frontend immediately pauses the `<audio>` element and sends an `interrupt` packet to the backend.
   - Backend cancels the `AbortController` for the current LLM turn, immediately halting LLM streaming and TTS synthesis.
   - Backend starts a fresh transcription buffer for the new utterance.
+
+### 4. UI Modals & Data Entry
+- For explicit PII fields (Name, Email, Phone), the AI is strictly prompted to ask the user to enter the data in a box.
+- The `VoiceWidget` detects this prompt (`enter your email`, etc.) and opens a specialized input modal.
+- Submitting the modal fires a `text_input` packet over WebSocket, which the backend injects directly into the conversation stream.
+
+### 5. Delayed Lead Generation
+- When the conversation reaches the `SCORED` state, the final lead is *not* generated immediately.
+- The backend queues a 5-minute `setTimeout` delay.
+- This allows a grace period for the user to make post-completion corrections to their data via Voice or Text before the database record is finalized.
