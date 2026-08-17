@@ -1775,3 +1775,44 @@ The goal of this Epic is to add a full telephony pipeline to Ladeway, allowing t
 ### Manual Verification
 - We will literally call the provisioned phone number.
 - We will speak to the AI, intentionally interrupt it to test barge-in, stay silent to test re-prompting, and verify that the call transcript is properly saved to the database.
+
+
+
+# Voice Experience and Lead Generation Updates
+
+This plan outlines the changes required to address three main areas: making the AI sound more human and direct, adding specific popups for contact information, and delaying lead generation.
+
+## User Review Required
+Please review the proposed UI flow for the popups. When the AI asks for a specific field, a popup will appear for just that field instead of a general text box. Is this what you had in mind?
+
+## Open Questions
+None.
+
+## Proposed Changes
+
+### AI Prompt & Personality
+#### [MODIFY] `apps/api/src/ai/prompt.service.ts`
+- **Persona Updates**: Add strict instructions for the AI to *never* use filler words (e.g., "hmm", "mhmm", "alright", "are you there", "let me check").
+- **Directness**: Instruct the AI to be fast, conversational, and direct, exactly like a human agent who doesn't use robotic filler words.
+- **Explicit Instructions**: When asking for Name, Email, or Phone, instruct the AI to explicitly say: "Please enter your [name/email/phone] in the box."
+
+### Frontend Voice Widget
+#### [MODIFY] `apps/web/components/voice/VoiceWidget.tsx`
+- **Remove General Text Box**: Hide the persistent general text box.
+- **Add Specific Popups**: Introduce specialized popup dialogs for Name, Email, and Phone.
+- **Trigger Logic**: When the AI's response includes requests for these specific fields, the respective popup will automatically open.
+- **Submission**: Submitting the popup will send the data directly to the AI and close the popup.
+
+### Backend Lead Generation
+#### [MODIFY] `apps/api/src/conversation/conversation.service.ts`
+- **Delay Lead Creation**: Currently, the lead is created instantaneously when the AI finishes collecting information. We will change this to delay the `createLeadFromConversation` call by exactly 5 minutes using a scheduled timeout.
+- **Grace Period**: This 5-minute window serves as a grace period. If you realize something is wrong and tell the AI to correct it during this time, the final lead generated at the end of the 5 minutes will contain the corrected information.
+
+## Verification Plan
+### Automated Tests
+- N/A
+
+### Manual Verification
+- Start a voice call. Observe that the AI speaks without filler words.
+- Wait for the AI to ask for contact details and verify the specific popups appear.
+- Finish the conversation and verify the lead is not immediately generated, but appears in the database exactly 5 minutes later.

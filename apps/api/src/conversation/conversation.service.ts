@@ -262,7 +262,7 @@ export class ConversationService {
     });
 
     // If terminal state, update the DB record too
-    let finalLead = null;
+    let finalLead: any = null;
     let confirmationMessage = undefined;
 
     if (newStatus === ConversationStatus.SCORED || newStatus === ConversationStatus.TRANSFERRED || newStatus === ConversationStatus.CLOSED) {
