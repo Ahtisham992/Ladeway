@@ -40,7 +40,7 @@ export class VoiceOrchestratorService {
     // Setup Deepgram Live STT with utterance end detection
     const stt = this.deepgramClient.listen.live({
       model: 'nova-2',
-      language: 'en-US',
+      language: 'en-IN', // Better recognition for South Asian accents and locations like Rawalpindi
       smart_format: true,
       encoding: 'linear16',
       sample_rate: 16000,
