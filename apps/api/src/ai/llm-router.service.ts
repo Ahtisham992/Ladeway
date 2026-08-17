@@ -125,7 +125,7 @@ export class LLMRouterService {
 
     const chatCompletion = await groq.chat.completions.create({
       messages: messages as any,
-      model: 'llama-3.1-8b-instant', // using the model requested by the user
+      model: 'mixtral-8x7b-32768', // using the model requested by the user
       stream: true,
       temperature: options?.temperature ?? 1,
       max_completion_tokens: options?.maxTokens ?? 1024,
