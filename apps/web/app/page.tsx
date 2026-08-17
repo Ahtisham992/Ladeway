@@ -45,32 +45,32 @@ export default async function LandingPage() {
 
       <main className="flex-1">
         {/* Hero Section */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 animate-fade-in-up">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-8 animate-fade-in-up min-h-[calc(100vh-5rem)] flex items-center">
+          <div className="grid lg:grid-cols-2 gap-12 lg:gap-8 items-center w-full">
             
             {/* Left Content Column */}
             <div>
-              <div className="inline-flex items-center text-xs font-bold text-secondary uppercase tracking-widest mb-6 border-b border-border pb-1">
+              <div className="inline-flex items-center text-xs font-bold text-secondary uppercase tracking-widest mb-4 border-b border-border pb-1">
                 Accelerated AI Pipelines from Raw Traffic to Qualified Leads
               </div>
-              <h1 className="text-5xl md:text-6xl font-bold text-primary tracking-tight leading-tight mb-6">
+              <h1 className="text-4xl lg:text-5xl font-bold text-primary tracking-tight leading-tight mb-4">
                 At Ladeway, we design and build end-to-end qualification systems.
               </h1>
-              <p className="text-xl font-medium text-secondary-900 italic mb-6 border-l-4 border-primary pl-4">
+              <p className="text-lg lg:text-xl font-medium text-secondary-900 italic mb-4 border-l-4 border-primary pl-4">
                 Our vision: "Converting complex conversations into actionable data."
               </p>
-              <p className="text-lg text-secondary mb-10 max-w-lg">
+              <p className="text-base lg:text-lg text-secondary mb-6 max-w-lg">
                 Ladeway provides intelligent, industry-agnostic AI agents. We develop software for natural language processing, dynamic scoring, and ultra-low latency voice pipelines.
               </p>
               
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 mb-12">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-8">
                 <Link href="/signup">
-                  <Button size="lg" className="bg-primary text-white hover:bg-primary-dark px-8 shadow-md hover:shadow-lg transition-all rounded-full h-14 text-lg">
+                  <Button size="lg" className="bg-primary text-white hover:bg-primary-dark px-8 shadow-md hover:shadow-lg transition-all rounded-full h-12 text-base">
                     Explore our platform
                     <svg className="w-5 h-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
                   </Button>
                 </Link>
-                <a href="#catalog" className="group flex items-center text-lg font-semibold text-primary hover:text-primary-dark transition-colors">
+                <a href="#catalog" className="group flex items-center text-base font-semibold text-primary hover:text-primary-dark transition-colors">
                   <span className="border-b-2 border-primary group-hover:border-primary-dark pb-0.5">Talk to our AI</span>
                   <svg className="w-5 h-5 ml-2 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
                 </a>
@@ -85,7 +85,7 @@ export default async function LandingPage() {
             </div>
 
             {/* Right Visual Column */}
-            <div className="relative hidden lg:block aspect-square w-full max-w-[550px] mx-auto">
+            <div className="relative hidden lg:block aspect-square w-full max-w-[450px] mx-auto">
               {/* Background circular highlight */}
               <div className="absolute inset-0 bg-gradient-to-tr from-surface to-white rounded-full opacity-70 border border-border"></div>
               
