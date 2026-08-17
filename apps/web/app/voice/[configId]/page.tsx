@@ -9,6 +9,16 @@ export default function VoicePage() {
   const params = useParams()
   const configId = params.configId as string
 
+  React.useEffect(() => {
+    window.history.pushState(null, '', window.location.href)
+    window.onpopstate = () => {
+      window.history.pushState(null, '', window.location.href)
+    }
+    return () => {
+      window.onpopstate = null
+    }
+  }, [])
+
   return (
     <div className="min-h-screen w-full bg-background flex flex-col items-center p-8">
       <div className="w-full max-w-4xl text-center mb-12 mt-12">

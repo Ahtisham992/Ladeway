@@ -180,17 +180,17 @@ export default async function LandingPage() {
                     <p className="text-sm text-secondary italic mb-6 line-clamp-3 relative pl-4 border-l-2 border-primary/20">
                       "{config.greeting}"
                     </p>
-                    <div className="flex flex-col gap-2 mt-auto w-full">
-                      <Link href={`/chat/${config.id}`} className="w-full">
-                        <Button variant="outline" className="w-full justify-between group-hover:bg-primary group-hover:text-white group-hover:border-primary transition-colors border-border">
-                          Start Conversation
-                          <MessageSquare className="w-4 h-4 ml-2 opacity-70" />
+                    <div className="flex gap-3 mt-auto w-full pt-4 border-t border-border/50">
+                      <Link href={`/chat/${config.id}`} className="flex-1">
+                        <Button variant="default" className="w-full justify-center bg-primary text-white hover:bg-primary-dark shadow-sm transition-all duration-200">
+                          <MessageSquare className="w-4 h-4 mr-2" />
+                          Text Chat
                         </Button>
                       </Link>
-                      <Link href={`/voice/${config.id}`} className="w-full">
-                        <Button variant="outline" className="w-full justify-between group-hover:bg-primary group-hover:text-white group-hover:border-primary transition-colors border-border bg-primary/5">
-                          Call Voice Assistant
-                          <PhoneCall className="w-4 h-4 ml-2 opacity-70" />
+                      <Link href={`/voice/${config.id}`} className="flex-1">
+                        <Button variant="outline" className="w-full justify-center border-primary/20 text-primary hover:bg-primary hover:text-white hover:border-primary shadow-sm transition-all duration-200">
+                          <PhoneCall className="w-4 h-4 mr-2" />
+                          Voice Call
                         </Button>
                       </Link>
                     </div>

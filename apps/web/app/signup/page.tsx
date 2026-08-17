@@ -41,9 +41,9 @@ export default function SignupPage() {
     <div className="min-h-screen bg-background flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md animate-fade-in-up">
         <div className="flex justify-center mb-8">
-          <div className="w-72 h-20 overflow-hidden flex items-center justify-center rounded-xl bg-white shadow-sm border border-border">
+          <Link href="/" className="w-72 h-20 overflow-hidden flex items-center justify-center rounded-xl bg-white shadow-sm border border-border hover:opacity-90 hover:shadow-md transition-all cursor-pointer">
             <img src="/logo.png" alt="Ladeway Logo" className="w-[120%] h-auto object-cover" />
-          </div>
+          </Link>
         </div>
         <h2 className="mt-6 text-center text-3xl font-bold text-primary tracking-tight">
           Start your Ladeway journey
