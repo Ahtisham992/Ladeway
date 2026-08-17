@@ -902,3 +902,32 @@ Required environment variables in `apps/api/.env`:
 - ✅ Utterance buffering prevents AI from interrupting user
 - ✅ Sentence-level TTS streaming reduces perceived latency
 
+
+
+# Implementation Complete: Voice Conversational Flow & UI Popups
+
+I have successfully updated the AI logic, frontend Voice UI, and backend lead generation workflow!
+
+## What was Changed
+
+### 1. Human-Like AI Persona
+- **No More Filler Words**: The AI prompt in `prompt.service.ts` has been updated with a strict, high-priority instruction forbidding filler words ("hmm", "mhmm", "alright", "let me check").
+- **Direct Interaction**: The AI is instructed to act like a fast, direct human agent.
+
+### 2. Specialized Input Popups
+- **Removed General Text Box**: The old persistent text input field is gone.
+- **Dynamic Dialogs**: The AI is now instructed to explicitly ask you to "Please enter your [name/email/phone] in the box".
+- **Trigger Logic**: The frontend detects this request and immediately launches a stylized, blur-backed popup modal customized for exactly that field.
+- **Easy Submission**: You can type your detail, press Enter (or click Submit), and the modal disappears immediately, sending the response smoothly back to the AI.
+
+### 3. Delayed Lead Generation (5-Minute Window)
+- **Wait Before Saving**: When the conversation concludes, the AI will thank you and inform you that your details will be finalized in about 5 minutes.
+- **Grace Period**: The `conversation.service.ts` will now wait exactly 5 minutes (via a `setTimeout` local job) before extracting and locking the final Lead record in the database.
+- **Make Changes**: During this 5-minute window, you can freely talk to the AI to correct any mistakes. When the timer hits zero, it pulls the most up-to-date state of the conversation!
+
+## Verification
+You can now open the Voice page in your application and begin a test call.
+- Notice the absence of the general text input.
+- Observe how the AI no longer uses filler words.
+- Wait for it to ask for an email, and see the dedicated popup appear.
+- Finish the conversation, and check the backend logs or database 5 minutes later to see the lead generated!

@@ -237,7 +237,6 @@ export function VoiceWidget({ configId }: { configId: string }) {
             ))}
             <div ref={chatEndRef} />
           </div>
-          </div>
         </div>
       )}
 
