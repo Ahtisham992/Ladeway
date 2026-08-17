@@ -12,8 +12,7 @@ export function VoiceWidget({ configId }: { configId: string }) {
   const [isCalling, setIsCalling] = React.useState(false)
   const [ws, setWs] = React.useState<WebSocket | null>(null)
   const [messages, setMessages] = React.useState<ChatMessage[]>([])
-  const [textInput, setTextInput] = React.useState('')
-  const inputRef = React.useRef<HTMLInputElement>(null)
+  const [activePopup, setActivePopup] = React.useState<'name' | 'email' | 'phone' | null>(null)
   const chatEndRef = React.useRef<HTMLDivElement>(null)
   const audioQueueRef = React.useRef<string[]>([])
   const isPlayingRef = React.useRef(false)
@@ -140,10 +139,14 @@ export function VoiceWidget({ configId }: { configId: string }) {
               addMessage({ role: 'user', text: data.text })
             } else if (data.type === 'ai_response') {
               addMessage({ role: 'ai', text: data.text })
-              // Auto-focus input if AI is asking for specific details
+              // Trigger popups based on AI requesting specific info
               const lowerText = data.text.toLowerCase()
-              if (lowerText.includes('email') || lowerText.includes('phone') || lowerText.includes('name')) {
-                setTimeout(() => inputRef.current?.focus(), 100)
+              if (lowerText.includes('enter your email')) {
+                setActivePopup('email')
+              } else if (lowerText.includes('enter your phone') || lowerText.includes('enter your contact')) {
+                setActivePopup('phone')
+              } else if (lowerText.includes('enter your name')) {
+                setActivePopup('name')
               }
             } else if (data.type === 'audio') {
               audioQueueRef.current.push(data.audioBase64)
@@ -181,17 +184,13 @@ export function VoiceWidget({ configId }: { configId: string }) {
     }
   }
 
-  const handleTextSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    const text = textInput.trim()
-    if (!text || !ws || ws.readyState !== WebSocket.OPEN) return
+  const handlePopupSubmit = (value: string) => {
+    if (!value.trim() || !ws || ws.readyState !== WebSocket.OPEN || !activePopup) return
     
-    // Add user message to UI
+    const text = `My ${activePopup} is ${value.trim()}`
     addMessage({ role: 'user', text })
-    
-    // Send as custom text event to backend
     ws.send(JSON.stringify({ type: 'text_input', text }))
-    setTextInput('')
+    setActivePopup(null)
   }
 
   const doCleanup = () => {
@@ -238,25 +237,43 @@ export function VoiceWidget({ configId }: { configId: string }) {
             ))}
             <div ref={chatEndRef} />
           </div>
-          
-          <form onSubmit={handleTextSubmit} className="flex w-full gap-2 mt-2 border-t pt-3">
-            <input
-              ref={inputRef}
-              type="text"
-              value={textInput}
-              onChange={e => setTextInput(e.target.value)}
-              placeholder="Or type here (e.g. email)..."
-              className="flex-1 px-3 py-2 text-sm rounded-md border border-secondary-300 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-              disabled={!isCalling}
+          </div>
+        </div>
+      )}
+
+      {activePopup && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/60 z-50 backdrop-blur-sm">
+          <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm animate-in fade-in zoom-in duration-200">
+            <h4 className="text-lg font-bold text-primary mb-2 capitalize">Enter your {activePopup}</h4>
+            <p className="text-sm text-secondary-500 mb-4">The AI assistant requested this information.</p>
+            <input 
+              autoFocus
+              className="w-full px-4 py-3 text-base rounded-lg border border-secondary-300 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent mb-4"
+              type={activePopup === 'email' ? 'email' : activePopup === 'phone' ? 'tel' : 'text'}
+              placeholder={`Type your ${activePopup} here...`}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handlePopupSubmit(e.currentTarget.value)
+                if (e.key === 'Escape') setActivePopup(null)
+              }}
             />
-            <button
-              type="submit"
-              disabled={!textInput.trim() || !isCalling}
-              className="px-4 py-2 bg-primary text-white text-sm font-medium rounded-md hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Send
-            </button>
-          </form>
+            <div className="flex gap-3 justify-end">
+              <button 
+                onClick={() => setActivePopup(null)}
+                className="px-4 py-2 text-secondary-600 hover:bg-secondary-100 rounded-lg text-sm font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={(e) => {
+                  const input = e.currentTarget.parentElement?.previousElementSibling as HTMLInputElement;
+                  handlePopupSubmit(input.value)
+                }}
+                className="px-4 py-2 bg-primary text-white hover:bg-primary-hover rounded-lg text-sm font-medium transition-colors shadow-sm"
+              >
+                Submit
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -275,22 +275,25 @@ export class ConversationService {
       });
       
       try {
-        finalLead = await this.leadService.createLeadFromConversation(session.conversationId);
-        
-        if (newStatus === ConversationStatus.SCORED && finalLead?.summary) {
-          const rawMessage = `Thank you — ${finalLead.summary
-            .replace(/^[A-Z][a-z]+ (is|has|seeks|wants|needs)/,
-              (match: string) => `we've noted that you ${match.split(' ').slice(1).join(' ')}`)
-            .toLowerCase()
-            .replace(/^./, (c: string) => c.toUpperCase())
-          }. A member of our team will be in touch with you shortly.`;
-
-          confirmationMessage = rawMessage.length > 20 
-            ? rawMessage 
-            : `Thank you — a member of our team will be in touch with you shortly.`;
+        if (newStatus === ConversationStatus.SCORED) {
+          // Trigger delayed lead generation (5 minutes)
+          this.logger.log(`Scheduling delayed lead generation for conversation ${session.conversationId} in 5 minutes`);
+          setTimeout(async () => {
+            try {
+              await this.leadService.createLeadFromConversation(session.conversationId);
+              this.logger.log(`Successfully executed delayed lead generation for conversation ${session.conversationId}`);
+            } catch (err: any) {
+              this.logger.error(`Failed to create delayed lead for conversation ${session.conversationId}`, err.stack);
+            }
+          }, 5 * 60 * 1000); // 5 minutes
+          
+          confirmationMessage = `Thank you — I have everything I need! I will finalize your details in about 5 minutes, so let me know now if you'd like to change anything. Otherwise, a member of our team will be in touch with you shortly.`;
+        } else {
+          // Immediately generate for transferred or closed calls (optional)
+          await this.leadService.createLeadFromConversation(session.conversationId);
         }
       } catch (err: any) {
-        this.logger.error(`Failed to create lead for conversation ${session.conversationId}`, err.stack);
+        this.logger.error(`Failed to handle lead generation for conversation ${session.conversationId}`, err.stack);
       }
     }
 
