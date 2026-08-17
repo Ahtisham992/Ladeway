@@ -1897,3 +1897,47 @@ If necessary, I will add custom keyframes for subtle floating effects (e.g., `fl
 ### Manual Verification
 - View the home page locally to ensure the two-column layout breaks down gracefully to a single column on mobile.
 - Verify the SVG animations are smooth, high-performance, and fit the existing color scheme (`#1F4E79`, slate, and off-white).
+
+
+# Epic 2: Phase 36 Implementation Plan (Call Recording & Persistence)
+
+This plan details the implementation for Phase 36 of the Ladeway roadmap, which requires recording the live Web Audio voice call (both the user's microphone and the AI's synthesized voice) and persisting it to the database for auditing and playback.
+
+## User Review Required
+Please review the storage strategy. I will be saving the `.webm` audio blobs directly to the local disk in a new `./uploads/recordings` directory. In a production environment, this should ideally be pushed to an S3 bucket, but for now, local storage will perfectly satisfy the MVP requirement.
+
+## Proposed Changes
+
+### 1. Database Schema (`apps/api/prisma/schema.prisma`)
+- Add `recordingUrl String?` to the `Conversation` model.
+- Run `npx prisma db push` to apply the schema changes to the database.
+
+### 2. Backend Upload Endpoint (`apps/api/src/voice/voice.controller.ts`)
+- Create a new `VoiceController` (and register it in `VoiceModule`).
+- Add a `POST /voice/recordings/:conversationId` endpoint.
+- Use NestJS `FileInterceptor` to accept a `.webm` audio blob.
+- Save the file to `./uploads/recordings/[conversationId].webm`.
+- Update the `Conversation` database row with `recordingUrl: '/uploads/recordings/[conversationId].webm'`.
+- Add a `GET /voice/recordings/:conversationId` endpoint that streams the audio file back for playback.
+
+### 3. Voice Gateway (`apps/api/src/voice/voice-orchestrator.service.ts`)
+- Currently, `VoiceWidget` only knows the `configId`. It needs the `conversationId` to associate the recording payload.
+- Update `handleNewCall` to send an initial WebSocket message: `{ type: 'call_metadata', conversationId: string }`.
+
+### 4. Client-side Recording (`apps/web/components/voice/VoiceWidget.tsx`)
+- Intercept the AI `<audio>` element using `AudioContext.createMediaElementSource()`.
+- Intercept the user's microphone using `AudioContext.createMediaStreamSource()`.
+- Mix both streams together using `AudioContext.createMediaStreamDestination()`.
+- Use the `MediaRecorder` API to record the mixed stream into chunks.
+- When the user hangs up or the WebSocket closes, compile the chunks into a single `audio/webm` Blob and `POST` it to the new backend endpoint.
+
+## Verification Plan
+### Automated Tests
+- The build process must succeed without TS errors.
+- The `npx prisma db push` command must apply cleanly.
+
+### Manual Verification
+1. I will place a test call in the browser and speak with the AI.
+2. I will end the call.
+3. I will check the network tab and the `uploads/recordings` folder to ensure the `.webm` file was successfully created.
+4. I will check the database to ensure the `Conversation` record was updated with the `recordingUrl`.

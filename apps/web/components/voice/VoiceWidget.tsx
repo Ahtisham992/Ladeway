@@ -17,6 +17,14 @@ export function VoiceWidget({ configId }: { configId: string }) {
   const audioQueueRef = React.useRef<string[]>([])
   const isPlayingRef = React.useRef(false)
   const cleanupRef = React.useRef<(() => void) | null>(null)
+  
+  // Recording state
+  const conversationIdRef = React.useRef<string | null>(null)
+  const globalAudioCtxRef = React.useRef<AudioContext | null>(null)
+  const mediaElementSourceRef = React.useRef<MediaElementAudioSourceNode | null>(null)
+  const mediaRecorderRef = React.useRef<MediaRecorder | null>(null)
+  const recordingChunksRef = React.useRef<Blob[]>([])
+
   // Persist audio element across renders
   const audioElRef = React.useRef<HTMLAudioElement | null>(null)
 
@@ -122,11 +130,65 @@ export function VoiceWidget({ configId }: { configId: string }) {
         source.connect(processor)
         processor.connect(audioContext.destination)
         
+        // Setup Call Recording
+        if (!globalAudioCtxRef.current) {
+          globalAudioCtxRef.current = new AudioContext()
+          mediaElementSourceRef.current = globalAudioCtxRef.current.createMediaElementSource(audioElRef.current!)
+          mediaElementSourceRef.current.connect(globalAudioCtxRef.current.destination)
+        }
+        
+        const recCtx = globalAudioCtxRef.current
+        const dest = recCtx.createMediaStreamDestination()
+        
+        // Mic into recorder
+        const recMicSource = recCtx.createMediaStreamSource(stream)
+        recMicSource.connect(dest)
+        
+        // Remote audio into recorder
+        if (mediaElementSourceRef.current) {
+          mediaElementSourceRef.current.connect(dest)
+        }
+        
+        const recorder = new MediaRecorder(dest.stream, { mimeType: 'audio/webm' })
+        recordingChunksRef.current = []
+        recorder.ondataavailable = e => {
+          if (e.data.size > 0) recordingChunksRef.current.push(e.data)
+        }
+        
+        recorder.onstop = async () => {
+          const blob = new Blob(recordingChunksRef.current, { type: 'audio/webm' })
+          const cid = conversationIdRef.current
+          if (cid && blob.size > 0) {
+            console.log(`Uploading recording for ${cid}...`)
+            const formData = new FormData()
+            formData.append('audio', blob, `${cid}.webm`)
+            try {
+              await fetch(`http://localhost:3001/voice/recordings/${cid}`, {
+                method: 'POST',
+                body: formData
+              })
+              console.log('Upload complete')
+            } catch (err) {
+              console.error('Upload failed', err)
+            }
+          }
+        }
+        recorder.start(1000)
+        mediaRecorderRef.current = recorder
+
         cleanupRef.current = () => {
           source.disconnect()
           processor.disconnect()
+          recMicSource.disconnect()
+          if (mediaElementSourceRef.current) {
+            try { mediaElementSourceRef.current.disconnect(dest) } catch (e) {}
+          }
           audioContext.close().catch(() => {})
           stream.getTracks().forEach(t => t.stop())
+          
+          if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.stop()
+          }
         }
       }
 
@@ -161,6 +223,9 @@ export function VoiceWidget({ configId }: { configId: string }) {
               isPlayingRef.current = false
             } else if (data.type === 'status') {
               addMessage({ role: 'status', text: data.text })
+              if (data.conversationId) {
+                conversationIdRef.current = data.conversationId
+              }
             }
           }
         } catch (e) {

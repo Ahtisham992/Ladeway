@@ -67,6 +67,7 @@ model Conversation {
   messages      Message[]
   extractedData ExtractedData[]
   lead          Lead?
+  recordingUrl  String?
 
   @@index([tenantId])
   @@index([configId])

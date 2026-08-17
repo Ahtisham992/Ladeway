@@ -34,8 +34,8 @@ export class VoiceOrchestratorService {
   async handleNewCall(callId: string, clientWs: WebSocket, configId: string) {
     this.logger.log(`Handling new call setup for ID: ${callId}`);
     
-    const { sessionToken, greeting } = await this.conversationService.startConversation(configId);
-    this.logger.log(`Session created: ${sessionToken.substring(0, 8)}...`);
+    const { sessionToken, greeting, conversationId } = await this.conversationService.startConversation(configId);
+    this.logger.log(`Session created: ${sessionToken.substring(0, 8)}... (Conv ID: ${conversationId})`);
     
     // Setup Deepgram Live STT with utterance end detection
     const stt = this.deepgramClient.listen.live({
@@ -54,7 +54,11 @@ export class VoiceOrchestratorService {
     stt.on(LiveTranscriptionEvents.Open, () => {
       this.logger.log(`Deepgram STT connection opened for call ${callId}`);
       if (clientWs.readyState === WebSocket.OPEN) {
-        clientWs.send(JSON.stringify({ type: 'status', text: 'STT ready' }));
+        clientWs.send(JSON.stringify({ 
+          type: 'status', 
+          text: 'STT ready',
+          conversationId: conversationId
+        }));
       }
     });
 
