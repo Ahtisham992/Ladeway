@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { createClient, LiveClient, LiveTranscriptionEvents } from '@deepgram/sdk';
 import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
 import { ConversationService } from '../conversation/conversation.service';
+import { PrismaService } from '../database/prisma.service';
 import { WebSocket } from 'ws';
 
 @Injectable()
@@ -20,11 +21,13 @@ export class VoiceOrchestratorService {
     utteranceBuffer: string;
     utteranceTimer: ReturnType<typeof setTimeout> | null;
     turnAbortController: AbortController | null;
+    forwardingNumber: string | null;
   }>();
 
   constructor(
     private configService: ConfigService,
-    private conversationService: ConversationService
+    private conversationService: ConversationService,
+    private prisma: PrismaService
   ) {
     this.deepgramApiKey = this.configService.get<string>('DEEPGRAM_API_KEY') || '';
     this.logger.log(`Deepgram key present: ${!!this.deepgramApiKey}`);
@@ -36,11 +39,17 @@ export class VoiceOrchestratorService {
     
     const { sessionToken, greeting, conversationId } = await this.conversationService.startConversation(configId);
     this.logger.log(`Session created: ${sessionToken.substring(0, 8)}... (Conv ID: ${conversationId})`);
+
+    const dbConv = await this.prisma.$system.conversation.findUnique({
+      where: { id: conversationId },
+      include: { config: true },
+    });
+    const forwardingNumber = dbConv?.config?.forwardingNumber || null;
     
     // Setup Deepgram Live STT with utterance end detection
     const stt = this.deepgramClient.listen.live({
       model: 'nova-2',
-      language: 'en-IN', // Better recognition for South Asian accents and locations like Rawalpindi
+      language: 'en-US', // Better recognition for South Asian accents and locations like Rawalpindi
       smart_format: true,
       encoding: 'linear16',
       sample_rate: 16000,
@@ -115,6 +124,7 @@ export class VoiceOrchestratorService {
       utteranceBuffer: '',
       utteranceTimer: null,
       turnAbortController: null,
+      forwardingNumber
     });
     
     // Send greeting immediately via TTS
@@ -226,6 +236,18 @@ export class VoiceOrchestratorService {
         // Skip metadata chunks
         if (chunk.includes('"_done":true') || chunk.includes('"_done": true')) {
           this.logger.log(`[Metadata]: ${chunk.substring(0, 80)}`);
+          try {
+            const meta = JSON.parse(chunk);
+            if (meta.status === 'TRANSFERRED') {
+              this.logger.log(`[Escalation] Sending transfer command to client. Forwarding number: ${call.forwardingNumber}`);
+              if (call.clientWs.readyState === WebSocket.OPEN) {
+                call.clientWs.send(JSON.stringify({
+                  type: 'transfer',
+                  number: call.forwardingNumber
+                }));
+              }
+            }
+          } catch (e) {}
           continue;
         }
         

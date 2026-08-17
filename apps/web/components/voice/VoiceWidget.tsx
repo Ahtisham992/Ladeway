@@ -13,6 +13,7 @@ export function VoiceWidget({ configId }: { configId: string }) {
   const [ws, setWs] = React.useState<WebSocket | null>(null)
   const [messages, setMessages] = React.useState<ChatMessage[]>([])
   const [activePopup, setActivePopup] = React.useState<'name' | 'email' | 'phone' | null>(null)
+  const [transferNumber, setTransferNumber] = React.useState<string | null>(null)
   const chatEndRef = React.useRef<HTMLDivElement>(null)
   const audioQueueRef = React.useRef<string[]>([])
   const isPlayingRef = React.useRef(false)
@@ -226,6 +227,11 @@ export function VoiceWidget({ configId }: { configId: string }) {
               if (data.conversationId) {
                 conversationIdRef.current = data.conversationId
               }
+            } else if (data.type === 'transfer') {
+              setTransferNumber(data.number || '+18005550199') // Fallback if null
+              setTimeout(() => {
+                endCall()
+              }, 5000) // End call after 5 seconds to let the AI finish its "transferring you now" speech
             }
           }
         } catch (e) {
@@ -313,12 +319,8 @@ export function VoiceWidget({ configId }: { configId: string }) {
             <input 
               autoFocus
               className="w-full px-4 py-3 text-base rounded-lg border border-secondary-300 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent mb-4"
-              type={activePopup === 'email' ? 'email' : activePopup === 'phone' ? 'tel' : 'text'}
-              placeholder={`Type your ${activePopup} here...`}
-              onKeyDown={e => {
-                if (e.key === 'Enter') handlePopupSubmit(e.currentTarget.value)
-                if (e.key === 'Escape') setActivePopup(null)
-              }}
+              placeholder={`e.g. ${activePopup === 'email' ? 'john@example.com' : activePopup === 'phone' ? '+1 234 567 8900' : 'John Doe'}`}
+              onKeyDown={(e) => { if (e.key === 'Enter') handlePopupSubmit(e.currentTarget.value) }}
             />
             <div className="flex gap-3 justify-end">
               <button 
@@ -341,23 +343,53 @@ export function VoiceWidget({ configId }: { configId: string }) {
         </div>
       )}
 
-      {!isCalling && (
+      {!isCalling && !transferNumber && (
         <p className="text-secondary-500 text-center text-sm mb-6 max-w-xs">
           Click the button below to start a voice conversation with the AI.
         </p>
       )}
 
-      <button
-        onClick={isCalling ? endCall : startCall}
-        className={`flex items-center space-x-2 px-8 py-3 rounded-full font-semibold transition-all ${
-          isCalling 
-            ? 'bg-error text-white hover:bg-error-hover shadow-lg hover:shadow-xl hover:-translate-y-0.5' 
-            : 'bg-primary text-white hover:bg-primary-600 shadow-lg hover:shadow-xl hover:-translate-y-0.5'
-        }`}
-      >
-        {isCalling ? <PhoneOff className="h-5 w-5" /> : <PhoneCall className="h-5 w-5" />}
-        <span>{isCalling ? "End Call" : "Start Call"}</span>
-      </button>
+      {transferNumber && !isCalling && (
+        <div className="w-full max-w-md bg-green-50 rounded-xl p-6 mb-6 border border-green-200 shadow-md flex flex-col items-center animate-in fade-in zoom-in duration-500">
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+            <PhoneCall className="h-8 w-8 text-green-600 animate-pulse" />
+          </div>
+          <h3 className="text-xl font-bold text-green-800 mb-2 text-center">Transfer Successful</h3>
+          <p className="text-sm text-green-700 text-center mb-6">
+            The AI has escalated your conversation. Click below to immediately dial a human agent.
+          </p>
+          <a 
+            href={`tel:${transferNumber}`} 
+            className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-6 rounded-xl shadow-lg transition-all transform hover:scale-105 active:scale-95"
+          >
+            <PhoneCall className="w-5 h-5" />
+            Call Agent Now ({transferNumber})
+          </a>
+        </div>
+      )}
+
+      {!transferNumber && (
+        <button
+          onClick={isCalling ? endCall : startCall}
+          className={`flex items-center space-x-2 px-8 py-3 rounded-full font-semibold transition-all ${
+            isCalling 
+              ? 'bg-red-500 hover:bg-red-600 text-white shadow-[0_0_15px_rgba(239,68,68,0.5)]'
+              : 'bg-primary hover:bg-primary-dark text-white shadow-lg'
+          }`}
+        >
+          {isCalling ? (
+            <>
+              <PhoneOff className="w-5 h-5" />
+              <span>End Conversation</span>
+            </>
+          ) : (
+            <>
+              <PhoneCall className="w-5 h-5" />
+              <span>Start Voice Call</span>
+            </>
+          )}
+        </button>
+      )}
     </div>
   )
 }

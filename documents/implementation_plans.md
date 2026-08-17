@@ -1941,3 +1941,36 @@ Please review the storage strategy. I will be saving the `.webm` audio blobs dir
 2. I will end the call.
 3. I will check the network tab and the `uploads/recordings` folder to ensure the `.webm` file was successfully created.
 4. I will check the database to ensure the `Conversation` record was updated with the `recordingUrl`.
+# Epic 2: Phase 37 Implementation Plan (Voice-to-Human Transfer)
+
+This plan outlines the implementation for Phase 37, which involves handling live voice call transfers.
+
+## Adaptation for Web Audio
+Since we pivoted away from Twilio to a native browser Web Audio pipeline, we do not have a public telephone network dialer to "forward" the active call stream. Instead, we will adapt the transfer mechanism for the web:
+When the AI decides to escalate the call, it will politely inform the user, gracefully terminate the Web Audio session, and trigger a native "Call to Action" on the user's screen providing the exact phone number to dial, which native mobile devices will immediately prompt the user to call.
+
+## Proposed Changes
+
+### 1. Database Schema (`apps/api/prisma/schema.prisma`)
+- Add `forwardingNumber String?` to the `IndustryConfig` model so each tenant can specify the exact support phone number for escalations.
+- Run `npx prisma db push` to apply the changes.
+
+### 2. Backend Orchestration (`apps/api/src/voice/voice-orchestrator.service.ts`)
+- Load the `forwardingNumber` from the database when a new call connects.
+- Intercept the conversation flow after `ConversationService.handleMessage` is executed.
+- If `nextAction === QualificationAction.TRIGGER_TRANSFER`:
+  - Synthesize the final AI "transferring" message.
+  - Send a special WebSocket message: `{ type: 'transfer', number: forwardingNumber }`.
+  - Terminate the backend connection securely.
+
+### 3. Frontend Web Client (`apps/web/components/voice/VoiceWidget.tsx`)
+- Listen for the `type: 'transfer'` WebSocket message.
+- Immediately stop the `MediaRecorder`, upload the final audio chunk, and close the WebSocket.
+- Update the UI to display a prominent "Transfer Successful" card.
+- If a forwarding number was provided, render a clickable "Call Support Agent" button using an `href="tel:..."` link, which bridges the gap to the human agent natively.
+
+## Verification Plan
+### Manual Verification
+1. I will initiate a voice call in the browser.
+2. I will intentionally say an escalation phrase like *"I want to speak to a human manager."*
+3. I will verify that the AI speaks its transfer message, the call cleanly terminates, and the "Call Agent" button with the correct forwarding number appears on the screen.

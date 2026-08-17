@@ -3,7 +3,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from '../database/prisma.service';
 
 @Controller('voice/recordings')
 export class VoiceController {

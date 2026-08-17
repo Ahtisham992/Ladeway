@@ -968,3 +968,33 @@ Finally, I generated standard boilerplate templates for your legal and complianc
 
 ## Validation
 I've updated the [Home Page](file:///d:/logistics/apps/web/app/page.tsx) to utilize the new Header and Footer components. Every link in the footer is now active and routing perfectly to the corresponding Next.js page.
+
+
+# Voice Call Recording & Persistence
+*(Phase 36 Implementation)*
+
+I have successfully built and integrated the live voice call recording feature into the Ladeway platform. This closes out one of the major missing pieces of Epic 2!
+
+## What was implemented
+
+### 1. Database Schema Update
+- Added the `recordingUrl` field to the `Conversation` model in Prisma.
+- Synced the new schema to the Neon PostgreSQL database.
+
+### 2. NestJS Backend Endpoints
+- Created the `VoiceController` to handle audio blobs.
+- Implemented `POST /voice/recordings/:conversationId` which accepts `audio/webm` blobs from the frontend and saves them securely to the server's local disk (`./uploads/recordings`).
+- Implemented `GET /voice/recordings/:conversationId` which streams the recorded audio back to authorized clients for playback.
+- Automatically updates the `Conversation` database row with the exact URI path to the audio file.
+
+### 3. Web Audio Streaming & Mixing
+- Upgraded the `VoiceWidget` component to handle real-time audio stream mixing.
+- Created an `AudioContext` that combines the `MediaStreamSource` (the caller's microphone) and the `MediaElementSource` (the incoming synthesized AI voice).
+- Piped the mixed destination stream directly into a `MediaRecorder`.
+
+### 4. Client-side Uploads
+- The frontend now captures the conversation's unique `conversationId` natively over the WebSocket connection.
+- When the user hangs up or the call terminates, the `MediaRecorder` instantly compiles the audio chunks into a compressed `.webm` blob and automatically uploads it to the backend.
+
+> [!NOTE]
+> For this MVP implementation, audio files are saved to the server's local `./uploads/recordings` directory. For a large-scale production deployment, this endpoint should easily be refactored to stream the `Express.Multer.File` buffer directly to an AWS S3 bucket instead.

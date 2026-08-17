@@ -32,6 +32,7 @@ model IndustryConfig {
   fieldsJson       Json           // QualificationField[]
   scoringRulesJson Json           // ScoringRule[]
   isActive         Boolean        @default(true)
+  forwardingNumber String?
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   conversations    Conversation[]
